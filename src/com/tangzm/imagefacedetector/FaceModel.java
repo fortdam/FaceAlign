@@ -7,8 +7,14 @@ import java.io.Reader;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
 
 import android.content.Context;
+
+interface FaceModelCallback {
+	void modeLoaded();
+}
 
 public class FaceModel {
 	
@@ -19,7 +25,9 @@ public class FaceModel {
 	public int numEVectors;
 	public int numPts;
 	
+	
 	public FaceModel(Context context, int resId) {
+		
 		StringBuilder builder = new StringBuilder();
 		InputStream is = context.getResources().openRawResource(resId);
 		char[] buffer = new char[1024];
@@ -92,10 +100,18 @@ class PathModel {
 	private static final String NORM_LABEL = "normal";
 }
 
+class CvShape {
+	public Mat meanShape;
+	public Mat eigenVectors;
+	public Mat eigenValues;
+}
+
 class ShapeModel {	
 	public double[] eigenValues;
 	public double[][] eigenVectors;
 	public double[] meanShape;
+	
+	public CvShape cvData;
 	
 	public ShapeModel(JSONObject shape){
 		try {
@@ -120,8 +136,32 @@ class ShapeModel {
 			}
 			
             JSONArray mean = shape.getJSONArray(MEAN_LABEL);
-            for (int i=0; i<numPts*2; i++){
-            	meanShape[i] = mean.getDouble(i);
+            for (int i=0; i<numPts; i++){
+            	JSONArray point = mean.getJSONArray(i);
+            	meanShape[i*2] = point.getDouble(0);
+            	meanShape[i*2+1] = point.getDouble(1);
+            }
+            
+            if (true){
+            	cvData = new CvShape();
+            	
+            	cvData.meanShape = new Mat(numPts*2, 1, CvType.CV_64F);
+            	cvData.eigenValues = new Mat(numEvec, 1, CvType.CV_64F);
+            	cvData.eigenVectors = new Mat(numPts*2, numEvec, CvType.CV_64F);
+            	
+            	for (int i=0; i<numPts*2; i++){
+            		cvData.meanShape.put(i, 0, meanShape[i]);
+            	}
+            	
+            	for (int i=0; i<numEvec; i++){
+            		cvData.eigenValues.put(i, 0, eigenValues[i]);
+            	}
+            	
+            	for (int i=0; i<numPts*2; i++){
+            		for (int j=0; j<numEvec; j++){
+            			cvData.eigenVectors.put(i,j,eigenVectors[i][j]);
+            		}
+            	}
             }
 		}
 		catch (Exception e){

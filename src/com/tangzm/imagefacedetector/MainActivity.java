@@ -5,6 +5,7 @@ import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.media.FaceDetector;
@@ -23,8 +24,10 @@ public class MainActivity extends Activity implements OnClickListener{
 	static final int GALLERY_INTENT_ID = 0x1515;
 
 	private FaceModel model = null;
-	private ImageView imgFrame = null;
+	private FaceAlignProc proc = null;
+	private FaceView imgFrame = null;
 	private Bitmap currPic = null;
+	private Context appCntx = null;
 	
 	 private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
 	        @Override
@@ -33,7 +36,10 @@ public class MainActivity extends Activity implements OnClickListener{
 	                case LoaderCallbackInterface.SUCCESS:
 	                {
 	                    Log.i(TAG, "OpenCV loaded successfully");
-	                } break;
+	            		model = new FaceModel(appCntx, R.raw.model); //now the model is loaded synchronously	            		
+	            		//Log.e(TAG, proc.getCurrentShape().dump());
+	                } 
+	                break;
 	                default:
 	                {
 	                    super.onManagerConnected(status);
@@ -46,11 +52,11 @@ public class MainActivity extends Activity implements OnClickListener{
 		super.onCreate(savedInstanceState);
 		setContentView(R.layout.activity_main);
 		
+		appCntx = this;
+		
 		imgFrame = (FaceView)findViewById(R.id.FaceImage);
 		imgFrame.setClickable(true);
 		imgFrame.setOnClickListener(this);
-		
-		model = new FaceModel(this, R.raw.model);
 	}
 	
 	@Override
@@ -82,7 +88,13 @@ public class MainActivity extends Activity implements OnClickListener{
 			}
 			imgFrame.setImageBitmap(currPic);
 			
-			makeInitialGuess(currPic);
+			if (null == proc){
+				proc = new FaceAlignProc();
+				proc.init(model);
+				proc.setPicture(currPic);
+				proc.initialPicAlign(418, 952, 611, 945);
+				imgFrame.addPlot(proc);
+			}
 		}
 	}
 
