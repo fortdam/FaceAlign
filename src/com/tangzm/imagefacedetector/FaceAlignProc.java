@@ -5,10 +5,14 @@ import org.opencv.core.Mat;
 import org.opencv.core.Range;
 import org.opencv.core.Scalar;
 
+import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.util.Log;
+import android.renderscript.Allocation;
+import android.renderscript.Element;
+import android.renderscript.RenderScript;
+import android.renderscript.Type;
 
 
 public class FaceAlignProc implements Plotable{
@@ -16,35 +20,35 @@ public class FaceAlignProc implements Plotable{
 	public void init(FaceModel mod){
 		model = mod;
 		
-		cvParams = new Mat(model.numEVectors+4, 1, CvType.CV_64F, new Scalar(0));
+		cvParams = new Mat(model.numEVectors+4, 1, CvType.CV_32F, new Scalar(0));
 		cvParams.put(0, 0, 1.0);
 		//cvParams.put(4, 0, 50);
 		
-		params = new double[model.numEVectors + 4];		
+		params = new float[model.numEVectors + 4];		
 	}
 	
 	public void setPicture(Bitmap pic) {
 		origPic = pic;
 	}
 	
-	public void initialPicAlign(double leftX, double leftY, double rightX, int rightY){
+	public void initialPicAlign(Context ctx, float leftX, float leftY, float rightX, int rightY){
 		int leftEyeIndex = model.pathModel.paths[model.pathModel.paths.length-2][0];
 		int rightEyeIndex = model.pathModel.paths[model.pathModel.paths.length-1][0];
 		
-		double meanLeftX = (model.shapeModel.cvData.meanShape.get(leftEyeIndex*2, 0))[0];
-		double meanLeftY = (model.shapeModel.cvData.meanShape.get(leftEyeIndex*2+1, 0))[0];
-		double meanRightX = (model.shapeModel.cvData.meanShape.get(rightEyeIndex*2, 0))[0];
-		double meanRightY = (model.shapeModel.cvData.meanShape.get(rightEyeIndex*2+1, 0))[0];	
+		float meanLeftX = (float)((model.shapeModel.cvData.meanShape.get(leftEyeIndex*2, 0))[0]);
+		float meanLeftY = (float)((model.shapeModel.cvData.meanShape.get(leftEyeIndex*2+1, 0))[0]);
+		float meanRightX = (float)((model.shapeModel.cvData.meanShape.get(rightEyeIndex*2, 0))[0]);
+		float meanRightY = (float)((model.shapeModel.cvData.meanShape.get(rightEyeIndex*2+1, 0))[0]);	
 		
-		double meanAngle = Math.atan((meanRightY-meanLeftY)/(meanRightX-meanLeftX));
-		double currAngle = Math.atan((rightY-leftY)/(rightX-leftX));
+		float meanAngle = (float)(Math.atan((meanRightY-meanLeftY)/(meanRightX-meanLeftX)));
+		float currAngle = (float)(Math.atan((rightY-leftY)/(rightX-leftX)));
 		
-		double diffAngle = currAngle - meanAngle;
+		float diffAngle = currAngle - meanAngle;
 		
-        double meanDist = Math.hypot(meanRightX-meanLeftX, meanRightY-meanLeftY);
-        double currDist = Math.hypot(rightX-leftX, rightY-leftY);
+        float meanDist = (float)(Math.hypot(meanRightX-meanLeftX, meanRightY-meanLeftY));
+        float currDist = (float)(Math.hypot(rightX-leftX, rightY-leftY));
         
-        double scale = meanDist/currDist;
+        float scale = meanDist/currDist;
         procScale = scale;
         
         procPic = Bitmap.createScaledBitmap(origPic, (int)(origPic.getWidth()*scale), (int)(origPic.getHeight()*scale), true);
@@ -58,6 +62,38 @@ public class FaceAlignProc implements Plotable{
         cvParams.put(1, 0, Math.sin(diffAngle));
         cvParams.put(2, 0, (rightX+leftX)/2-(meanRightX+meanLeftX)/2);
         cvParams.put(3, 0, (rightY+leftY)/2-(meanRightY+meanLeftY)/2);
+        
+        //Create the float image
+        RenderScript rs = RenderScript.create(ctx);
+        ScriptC_im2float script = new ScriptC_im2float(rs);
+        Allocation inAlloc = Allocation.createFromBitmap(rs, procPic);
+        Type.Builder tb = new Type.Builder(rs, Element.U8(rs));
+        tb.setX(procPic.getWidth()).setY(procPic.getHeight());
+        picGrayScale = new byte[procPic.getWidth()*procPic.getHeight()];
+        Allocation outAlloc = Allocation.createTyped(rs, tb.create());
+        script.forEach_root(inAlloc, outAlloc);
+        outAlloc.copyTo(picGrayScale);	
+        
+        byte[] patches = cropPatches();
+        mFilter = new Filter2D(ctx, 
+        				model.patchModel.weightsList, 
+        				model.patchModel.biasList, 
+        				patches, 
+        				model.numPts, 
+        				model.patchModel.sampleWidth, 
+        				model.patchModel.sampleHeight, 
+        				(model.patchModel.sampleWidth+SEARCH_WIN_W-1),
+        				(model.patchModel.sampleHeight+SEARCH_WIN_H-1));	
+	}
+	
+	public void search(boolean last){
+		mFilter.process();
+		
+		float[] response = mFilter.gerResponseImages();
+		
+		if (!last){
+			mFilter.setPatches(cropPatches());
+		}
 	}
 	
 	public void plot(Canvas canvas, Paint paint){
@@ -68,11 +104,11 @@ public class FaceAlignProc implements Plotable{
 		
 		for (int i=0; i<path.paths.length; i++){
 			for (int j=1; j<path.paths[i].length; j++){
-				double startX = (curr.get(path.paths[i][j-1]*2, 0))[0];
-				double startY = (curr.get(path.paths[i][j-1]*2+1, 0))[0];
-				double endX = (curr.get(path.paths[i][j]*2, 0))[0];
-				double endY = (curr.get(path.paths[i][j]*2+1, 0))[0];
-				canvas.drawLine((float)(startX/procScale), (float)(startY/procScale), (float)(endX/procScale), (float)(endY/procScale), paint);
+				float startX = (float)((curr.get(path.paths[i][j-1]*2, 0))[0]);
+				float startY = (float)((curr.get(path.paths[i][j-1]*2+1, 0))[0]);
+				float endX = (float)((curr.get(path.paths[i][j]*2, 0))[0]);
+				float endY = (float)((curr.get(path.paths[i][j]*2+1, 0))[0]);
+				canvas.drawLine(startX/procScale, (float)(startY/procScale), (float)(endX/procScale), (float)(endY/procScale), paint);
 			}
 		}
 		
@@ -96,7 +132,7 @@ public class FaceAlignProc implements Plotable{
 		
 		for (int i=0; i<h; i++){
 			for (int j=0; j<w; j++){
-				double a = A.row(i).dot(B.col(j).t());
+				float a = (float)(A.row(i).dot(B.col(j).t()));
 				result.put(i, j, a);
 			}
 		}
@@ -108,8 +144,8 @@ public class FaceAlignProc implements Plotable{
 		
 		for (int i=0; i<A.height(); i++){
 			for (int j=0; j<A.width(); j++){
-				double[] val = {1.0};
-				double x,y;
+				float[] val = {1.0f};
+				float x,y;
 				A.get(i, j, val);
 				x = val[0];
 				B.get(i, j, val);
@@ -122,19 +158,20 @@ public class FaceAlignProc implements Plotable{
 	}
 	
 	private Mat getScaleRotateM(){
-		double[] val = new double[1];
-		double a,b;
+		float[] val = new float[1];
+		float a,b;
 		
 		cvParams.get(0, 0, val);
         a = val[0];		
 		cvParams.get(1, 0, val);
 		b = val[0];
 		
-		Mat result = Mat.zeros(model.numPts*2, model.numPts*2, CvType.CV_64F);
+		Mat result = Mat.zeros(model.numPts*2, model.numPts*2, CvType.CV_32F);
 		
 		for (int i=0; i<model.numPts; i++){
 			result.put(i*2, i*2, a);
-			result.put(i*2+1, i*2+1, a);
+			result.put(i*2+1, i*2+1, a);	
+
 			result.put(i*2, i*2+1, -b);
 			result.put(i*2+1, i*2, b);
 		}
@@ -143,15 +180,15 @@ public class FaceAlignProc implements Plotable{
 	}
 	
 	private Mat getTranslateM(){
-		double[] val = new double[1];
-		double x,y;
+		float[] val = new float[1];
+		float x,y;
 		
 		cvParams.get(2, 0, val);
 		x = val[0];
 		cvParams.get(3, 0, val);
 		y = val[0];
 		
-		Mat result = Mat.zeros(model.numPts*2, 1, CvType.CV_64F);
+		Mat result = Mat.zeros(model.numPts*2, 1, CvType.CV_32F);
 		for (int i=0; i<model.numPts; i++){
 			result.put(i*2, 0, x);
 			result.put(i*2+1, 0, y);
@@ -160,11 +197,46 @@ public class FaceAlignProc implements Plotable{
 		return result;
 	}
 	
+	private byte[] cropPatches(){
+		Mat currShape = getCurrentShape();
+		int filterW = model.patchModel.sampleWidth;
+		int filterH = model.patchModel.sampleHeight;
+		int patchW = filterW+SEARCH_WIN_W-1;
+		int patchH = filterH+SEARCH_WIN_H-1;
+		int shiftW = -(patchW-1)/2;
+		int shiftH = -(patchH-1)/2;
+		byte[] ret = new byte[model.numPts*patchW*patchH];
+		
+		for (int i=0; i<model.numPts; i++){
+			for (int j=0; j<patchH; j++){
+				for (int k=0; k<patchW; k++){
+					int posX = (int)((currShape.get(i*2, 0))[0]) + shiftW;
+					int posY = (int)((currShape.get(i*2+1, 0))[0]) + shiftH;
+					
+					if (posX<0 || posY<0 || posX>procPic.getWidth() || posY>procPic.getHeight()){ //out of image
+						ret[i*patchW*patchH+j*patchW+k] = 0; //set as black
+					}
+					else {
+						ret[i*patchW*patchH+j*patchW+k] = picGrayScale[posY*procPic.getWidth() + posX];
+					}
+				}
+			}
+		}
+		
+		return ret;
+	}
+	
 	private Bitmap origPic;
 	private Bitmap procPic;
-	private double procScale;
+	private byte[] picGrayScale;
+	private float procScale;
 	private FaceModel model;
 	
-	private double[] params;
+	private float[] params;
 	private Mat cvParams;
+	
+	private Filter2D mFilter;
+	
+	private static final int SEARCH_WIN_W = 11;
+	private static final int SEARCH_WIN_H = 11;
 }

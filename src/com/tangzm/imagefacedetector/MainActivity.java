@@ -92,7 +92,7 @@ public class MainActivity extends Activity implements OnClickListener{
 				proc = new FaceAlignProc();
 				proc.init(model);
 				proc.setPicture(currPic);
-				proc.initialPicAlign(418, 952, 611, 945);
+				proc.initialPicAlign(appCntx, 418, 952, 611, 945);
 				imgFrame.addPlot(proc);
 			}
 		}
