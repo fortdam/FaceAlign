@@ -93,6 +93,7 @@ public class MainActivity extends Activity implements OnClickListener{
 				proc.init(model);
 				proc.setPicture(currPic);
 				proc.initialPicAlign(appCntx, 418, 952, 611, 945);
+				//proc.search(true);
 				imgFrame.addPlot(proc);
 			}
 		}
