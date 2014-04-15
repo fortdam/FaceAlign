@@ -46,5 +46,5 @@ void root(const uint32_t *v_in, uint32_t *v_out, const void *usrData, uint32_t x
 	
 	result = (result - (minn*filterTemp))/(maxn-minn);
 	result += gBiasList[patchID];
-	gResponseList[*v_in] = 1/(1+exp(-result));
+	gResponseList[*v_in] = pow(1/(1+exp(-result)),2);
 }

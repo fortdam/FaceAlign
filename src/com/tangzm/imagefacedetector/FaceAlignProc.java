@@ -91,6 +91,8 @@ public class FaceAlignProc implements Plotable{
 		
 		mResponses = mFilter.gerResponseImages();
 		
+		mTempPlot = doMeanShift(mResponses, mOrigPositions,100);
+		
 		if (!last){
 			mFilter.setPatches(cropPatches());
 		}
@@ -146,7 +148,7 @@ public class FaceAlignProc implements Plotable{
 			int offsetX = -(SEARCH_WIN_W-1)/2;
 			int offsetY = -(SEARCH_WIN_H-1)/2;
 			
-			for (int i=53; i<54; i++){
+			for (int i=44; i<45; i++){
 				float centX = (float)((curr.get(i*2, 0))[0]);
 				float centY = (float)((curr.get(i*2+1, 0))[0]);
 				
@@ -173,6 +175,17 @@ public class FaceAlignProc implements Plotable{
 			for (int i=0; i<mModel.numPts; i++){
 				float centX = (float)((curr.get(i*2, 0))[0]);
 				float centY = (float)((curr.get(i*2+1, 0))[0]);
+				canvas.drawText(""+i, centX/mScaleFactor, centY/mScaleFactor, pt);
+			}
+		}
+		
+		if (mPlotTempPts){
+			Paint pt = new Paint();
+			pt.setColor(0xFF00FF00);
+
+			for (int i=0; i<mModel.numPts; i++){
+				float centX = (float)((mTempPlot.get(i*2, 0))[0]);
+				float centY = (float)((mTempPlot.get(i*2+1, 0))[0]);
 				canvas.drawText(""+i, centX/mScaleFactor, centY/mScaleFactor, pt);
 			}
 		}
@@ -272,6 +285,8 @@ public class FaceAlignProc implements Plotable{
 		int shiftH = -(patchH-1)/2;
 		byte[] ret = new byte[mModel.numPts*patchW*patchH];
 		
+		mOrigPositions = currShape;
+		
 		for (int i=0; i<mModel.numPts; i++){
 			for (int j=0; j<patchH; j++){
 				for (int k=0; k<patchW; k++){
@@ -290,6 +305,51 @@ public class FaceAlignProc implements Plotable{
 		return ret;
 	}
 	
+	public Mat doMeanShift(float[] responseImg, Mat currPositions, int variance){
+		Mat newPositions = new Mat(mModel.numPts*2, 1, CvType.CV_32F, new Scalar(0));
+		
+		float[] gaussKernel = new float[SEARCH_WIN_W*SEARCH_WIN_H];
+		
+		for (int i=0; i<mModel.numPts; i++){
+			float startX = (float)(mOrigPositions.get(i*2, 0)[0] - (SEARCH_WIN_W-1)/2);
+			float startY = (float)(mOrigPositions.get(i*2+1, 0)[0] - (SEARCH_WIN_H-1)/2);
+					
+			float dXBase = (float)(mOrigPositions.get(i*2, 0)[0] - currPositions.get(i*2, 0)[0] - (SEARCH_WIN_W-1)/2);
+			float dYBase = (float)(mOrigPositions.get(i*2+1, 0)[0] - currPositions.get(i*2+1, 0)[0] - (SEARCH_WIN_H-1)/2);
+			
+			int respImgOffset = i*SEARCH_WIN_W*SEARCH_WIN_H;
+			
+			float denominator = 0;
+			float numeratorX = 0;
+			float numeratorY = 0;
+			
+			for (int j=0; j<SEARCH_WIN_H; j++){
+				for (int k=0; k<SEARCH_WIN_W; k++){
+					float dX = dXBase+k;
+					float dY = dYBase+j;
+
+					gaussKernel[j*SEARCH_WIN_W + k] = (float)(Math.exp(-0.5*(dX*dX+dY*dY)/variance)) * 
+							responseImg[respImgOffset+j*SEARCH_WIN_W+k];
+					
+					
+					denominator += gaussKernel[j*SEARCH_WIN_W + k];
+				}
+			}
+			
+			for (int j=0; j<SEARCH_WIN_H; j++){
+				for (int k=0; k<SEARCH_WIN_W; k++){
+					numeratorX += (startX+k)*gaussKernel[j*SEARCH_WIN_W + k];
+					numeratorY += (startY+j)*gaussKernel[j*SEARCH_WIN_W + k];
+				}
+			}
+			
+			newPositions.put(i*2, 0, numeratorX/denominator);
+			newPositions.put(i*2+1, 0, numeratorY/denominator);
+		}
+		
+		return newPositions;
+	}
+	
 	private Bitmap mImgOrig;
 	private Bitmap mImgProc;
 	private byte[] mImgGrayScale;
@@ -297,16 +357,23 @@ public class FaceAlignProc implements Plotable{
 	private FaceModel mModel;
 	
 	private Mat mParams;
+	private Mat mOrigPositions;
 	
 	private float[] mResponses;
 	
 	private Filter2D mFilter;
 	
+	//For test
 	private boolean mPlotContour = false;
 	private boolean mPlotPts = true;
 	private boolean mPlotPatch = false;
-	private boolean mPlotResponse = true; //For test
+	private boolean mPlotResponse = true;
+	private boolean mPlotTempPts = true;
+	private Mat mTempPlot;
+	//For test
+	
 	
 	private static final int SEARCH_WIN_W = 11;
 	private static final int SEARCH_WIN_H = 11;
 }
+
