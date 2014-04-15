@@ -23,7 +23,6 @@ public class FaceAlignProc implements Plotable{
 		mParams = new Mat(mModel.numEVectors+4, 1, CvType.CV_32F, new Scalar(0));
 		mParams.put(0, 0, 1.0);
 		//cvParams.put(4, 0, 50);
-		
 	}
 	
 	public void setPicture(Bitmap pic) {
@@ -66,14 +65,14 @@ public class FaceAlignProc implements Plotable{
         RenderScript rs = RenderScript.create(ctx);
         ScriptC_im2float script = new ScriptC_im2float(rs);
         Allocation inAlloc = Allocation.createFromBitmap(rs, mImgProc);
-        Type.Builder tb = new Type.Builder(rs, Element.I16(rs));
+        Type.Builder tb = new Type.Builder(rs, Element.U8(rs));
         tb.setX(mImgProc.getWidth()).setY(mImgProc.getHeight());
-        mImgGrayScale = new short[mImgProc.getWidth()*mImgProc.getHeight()];
+        mImgGrayScale = new byte[mImgProc.getWidth()*mImgProc.getHeight()];
         Allocation outAlloc = Allocation.createTyped(rs, tb.create());
         script.forEach_root(inAlloc, outAlloc);
         outAlloc.copyTo(mImgGrayScale);	
-        /*
-        short[] patches = cropPatches();
+        
+        byte[] patches = cropPatches();
         mFilter = new Filter2D(ctx, 
         		mModel.patchModel.weightsList, 
         		mModel.patchModel.biasList, 
@@ -83,7 +82,7 @@ public class FaceAlignProc implements Plotable{
         				mModel.patchModel.sampleHeight, 
         				(mModel.patchModel.sampleWidth+SEARCH_WIN_W-1),
         				(mModel.patchModel.sampleHeight+SEARCH_WIN_H-1));
-        				*/
+        			
 	}
 	
 	public void search(boolean last){
@@ -93,7 +92,7 @@ public class FaceAlignProc implements Plotable{
 		mResponses = mFilter.gerResponseImages();
 		
 		if (!last){
-			//mFilter.setPatches(cropPatches());
+			mFilter.setPatches(cropPatches());
 		}
 	}
 	
@@ -103,18 +102,20 @@ public class FaceAlignProc implements Plotable{
 		CvShape s = mModel.shapeModel.cvData;
 		PathModel path = mModel.pathModel;
 		
-		for (int i=0; i<path.paths.length; i++){
-			for (int j=1; j<path.paths[i].length; j++){
-				float startX = (float)((curr.get(path.paths[i][j-1]*2, 0))[0]);
-				float startY = (float)((curr.get(path.paths[i][j-1]*2+1, 0))[0]);
-				float endX = (float)((curr.get(path.paths[i][j]*2, 0))[0]);
-				float endY = (float)((curr.get(path.paths[i][j]*2+1, 0))[0]);
-				canvas.drawLine(startX/mScaleFactor, (float)(startY/mScaleFactor), (float)(endX/mScaleFactor), (float)(endY/mScaleFactor), paint);
+		if (mPlotContour){
+			for (int i=0; i<path.paths.length; i++){
+				for (int j=1; j<path.paths[i].length; j++){
+					float startX = (float)((curr.get(path.paths[i][j-1]*2, 0))[0]);
+					float startY = (float)((curr.get(path.paths[i][j-1]*2+1, 0))[0]);
+					float endX = (float)((curr.get(path.paths[i][j]*2, 0))[0]);
+					float endY = (float)((curr.get(path.paths[i][j]*2+1, 0))[0]);
+					canvas.drawLine(startX/mScaleFactor, (float)(startY/mScaleFactor), (float)(endX/mScaleFactor), (float)(endY/mScaleFactor), paint);
+				}
 			}
 		}
-		if (mPlotPatch){
+		else if (mPlotPatch){
 			Paint pt = new Paint();
-			short[] patches = cropPatches();
+			byte[] patches = cropPatches();
 			
 			int offsetX = -(SEARCH_WIN_W+mModel.patchModel.sampleWidth-1)/2;
 			int offsetY = -(SEARCH_WIN_H+mModel.patchModel.sampleHeight-1)/2;
@@ -125,8 +126,8 @@ public class FaceAlignProc implements Plotable{
 				
 				for (int j=0; j<SEARCH_WIN_H+mModel.patchModel.sampleHeight-1; j++){
 					for (int k=0; k<(SEARCH_WIN_W+mModel.patchModel.sampleWidth-1); k++){
-						int color = patches[i*(SEARCH_WIN_W+mModel.patchModel.sampleWidth-1)*(SEARCH_WIN_H+mModel.patchModel.sampleHeight-1)+
-						                    (SEARCH_WIN_W+mModel.patchModel.sampleWidth-1)*j+k];
+						int color = (patches[i*(SEARCH_WIN_W+mModel.patchModel.sampleWidth-1)*(SEARCH_WIN_H+mModel.patchModel.sampleHeight-1)+
+						                    (SEARCH_WIN_W+mModel.patchModel.sampleWidth-1)*j+k])&0xFF;
 						
 						float left = (centX + k + offsetX)/mScaleFactor;
 						float top = (centY + j + offsetY)/mScaleFactor;
@@ -145,7 +146,7 @@ public class FaceAlignProc implements Plotable{
 			int offsetX = -(SEARCH_WIN_W-1)/2;
 			int offsetY = -(SEARCH_WIN_H-1)/2;
 			
-			for (int i=0; i<1; i++){
+			for (int i=53; i<54; i++){
 				float centX = (float)((curr.get(i*2, 0))[0]);
 				float centY = (float)((curr.get(i*2+1, 0))[0]);
 				
@@ -162,6 +163,17 @@ public class FaceAlignProc implements Plotable{
 						canvas.drawRect(left, top, right, bottom, pt);
 					}
 				}
+			}
+		}
+		
+		if (mPlotPts){
+			Paint pt = new Paint();
+			pt.setColor(0xFFFF0000);
+
+			for (int i=0; i<mModel.numPts; i++){
+				float centX = (float)((curr.get(i*2, 0))[0]);
+				float centY = (float)((curr.get(i*2+1, 0))[0]);
+				canvas.drawText(""+i, centX/mScaleFactor, centY/mScaleFactor, pt);
 			}
 		}
 	}
@@ -249,7 +261,7 @@ public class FaceAlignProc implements Plotable{
 		return result;
 	}
 	
-	private short[] cropPatches(){
+	private byte[] cropPatches(){
 		Mat currShape = getCurrentShape();
 		
 		int filterW = mModel.patchModel.sampleWidth;
@@ -258,7 +270,7 @@ public class FaceAlignProc implements Plotable{
 		int patchH = filterH+SEARCH_WIN_H-1;
 		int shiftW = -(patchW-1)/2;
 		int shiftH = -(patchH-1)/2;
-		short[] ret = new short[mModel.numPts*patchW*patchH];
+		byte[] ret = new byte[mModel.numPts*patchW*patchH];
 		
 		for (int i=0; i<mModel.numPts; i++){
 			for (int j=0; j<patchH; j++){
@@ -280,7 +292,7 @@ public class FaceAlignProc implements Plotable{
 	
 	private Bitmap mImgOrig;
 	private Bitmap mImgProc;
-	private short[] mImgGrayScale;
+	private byte[] mImgGrayScale;
 	private float mScaleFactor;
 	private FaceModel mModel;
 	
@@ -290,6 +302,8 @@ public class FaceAlignProc implements Plotable{
 	
 	private Filter2D mFilter;
 	
+	private boolean mPlotContour = false;
+	private boolean mPlotPts = true;
 	private boolean mPlotPatch = false;
 	private boolean mPlotResponse = true; //For test
 	

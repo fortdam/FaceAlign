@@ -29,15 +29,17 @@ public class Filter2D {
 		for (int i=0; i<numPatch; i++){
 			for (int k=0; k<(patchH-filterH+1); k++){
 				for (int l=0; l<(patchW-filterW+1); l++){
-					indice[i*responseSize + k*(patchW-filterW+1) + l] = i<<16 + k<<8 + l; 
+					int index = i*responseSize + k*(patchW-filterW+1) + l;
+					indice[index] = index; 
 				}
 			}
 		}
+		mIndexAlloc.copyFrom(indice);
 		
 		mScript.set_patchNum(numPatch);
 
 		mScript.set_weightWidth(filterW);
-		mScript.set_weightWidth(filterH);
+		mScript.set_weightHeight(filterH);
 		mScript.set_weightSize(filterW*filterH);
 		
 		mScript.set_patchWidth(patchW);
