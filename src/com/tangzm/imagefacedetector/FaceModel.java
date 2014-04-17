@@ -105,10 +105,12 @@ class CvShape {
 	public Mat meanShape;
 	public Mat eigenVectors;
 	public Mat eigenValues;
+	public Mat eigenConstraints;
 }
 
 class ShapeModel {	
 	public float[] eigenValues;
+	public float[] eigenConstraints;
 	public float[][] eigenVectors;
 	public float[] meanShape;
 	
@@ -120,12 +122,14 @@ class ShapeModel {
 			int numPts = shape.getInt(PTS_NUM_LABEL);
 			
 			eigenValues = new float[numEvec];
+			eigenConstraints = new float[numEvec];
 			eigenVectors = new float[numPts*2][numEvec];
 			meanShape = new float[numPts*2];
 			
 			JSONArray evArray = shape.getJSONArray(EVALUE_LABEL);
 			for (int i=0; i<numEvec; i++){
 				eigenValues[i] = (float)(evArray.getDouble(i));
+				eigenConstraints[i] = (float)(Math.sqrt(eigenValues[i])*3);
 			}
 			
 			JSONArray evecArray = shape.getJSONArray(EVEC_LABEL);
@@ -148,6 +152,7 @@ class ShapeModel {
             	
             	cvData.meanShape = new Mat(numPts*2, 1, CvType.CV_32F);
             	cvData.eigenValues = new Mat(numEvec, 1, CvType.CV_32F);
+            	cvData.eigenConstraints = new Mat(numEvec, 1, CvType.CV_32F);
             	cvData.eigenVectors = new Mat(numPts*2, numEvec, CvType.CV_32F);
             	
             	for (int i=0; i<numPts*2; i++){
@@ -156,6 +161,7 @@ class ShapeModel {
             	
             	for (int i=0; i<numEvec; i++){
             		cvData.eigenValues.put(i, 0, eigenValues[i]);
+            		cvData.eigenConstraints.put(i, 0, eigenConstraints);
             	}
             	
             	for (int i=0; i<numPts*2; i++){
