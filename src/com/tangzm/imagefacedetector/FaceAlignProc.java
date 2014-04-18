@@ -88,15 +88,15 @@ public class FaceAlignProc implements Plotable{
 	
 	public void search(boolean last){
 		
-		mFilter.process();
+		mFilter.process(true);
 		
 		mResponses = mFilter.gerResponseImages();
 		
-		mExtraPositions = doMeanShift(mResponses, mOrigPositions,1);
+		//mExtraPositions = doMeanShift(mResponses, mOrigPositions,10);
 
 
 		//mExtraPositions = makeTestDate(mParams);
-		//mExtraPositions = doChoosePeak(mResponses);
+		mExtraPositions = doChoosePeak(mResponses);
 		Mat jacob = createJacobian(mParams);
 		
 		//mTempPlot = addM(mulM(jacob, mulM(jacob.inv(Core.DECOMP_SVD), subM(mTempPlot, mOrigPositions))), mOrigPositions);
@@ -108,7 +108,7 @@ public class FaceAlignProc implements Plotable{
 		Mat deltaParams = mulM(mulM((mulM(transJacob, jacob)).inv(Core.DECOMP_SVD), transJacob), deltaPos);
 		mExtraParams = addM(deltaParams, mParams);
 		regularizeParams(mExtraParams);
-		//mExtraPositions = getShape(mExtraParams);
+		mExtraPositions = getShape(mExtraParams);
 		
 		//mTempPlot = getShape(addM(mParams, mulM(jacob.inv(Core.DECOMP_SVD),subM(mTempPlot, mOrigPositions))));//addM(mParams, mulM(jacob.inv(Core.DECOMP_SVD),subM(mTempPlot, mOrigPositions)))
 		

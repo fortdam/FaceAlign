@@ -17,10 +17,37 @@ float *gBiasList;
 uchar *gPatchList;
 float *gResponseList;
 
-void root(const uint32_t *v_in, uint32_t *v_out, const void *usrData, uint32_t x, uint32_t y) {
-	int patchID = (*v_in)/respSize;
-	int lineResp = ((*v_in)%respSize)/respWidth;
-	int rowResp = (*v_in)%respWidth;
+float *gRegularResponseList;
+
+void __attribute__((kernel)) regularize(uint32_t in) {
+	float maxn = 0;
+	float minn = 1.0;
+	float scale = 1.0;
+	
+	//Find the upper-lower bounds
+	for (int i=0; i<respHeight; i++) {
+		for (int j=0; j<respWidth; j++) {
+			float curr = gResponseList[respSize*in+i*respWidth+j];
+			maxn = fmax(maxn, curr);
+			minn = fmin(minn, curr);
+		}
+	} 
+	
+	scale = maxn-minn;
+	
+	//Do regulariztion for each point
+	for (int i=0; i<respHeight; i++) {
+		for (int j=0; j<respWidth; j++) {
+			gRegularResponseList[respSize*in+i*respWidth+j] = 
+				(gResponseList[respSize*in+i*respWidth+j] - minn)/scale;
+		}
+	} 	
+} 
+
+void __attribute__((kernel)) filter(uint32_t in) {
+	int patchID = in/respSize;
+	int lineResp = (in%respSize)/respWidth;
+	int rowResp = in%respWidth;
 	float result = 0;
 	
 	float minn = 256;
@@ -46,5 +73,5 @@ void root(const uint32_t *v_in, uint32_t *v_out, const void *usrData, uint32_t x
 	
 	result = (result - (minn*filterTemp))/(maxn-minn);
 	result += gBiasList[patchID];
-	gResponseList[*v_in] = 1/(1+exp(-result));
+	gResponseList[in] = 1/(1+exp(-result));
 }

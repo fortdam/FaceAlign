@@ -4,6 +4,7 @@ import android.content.Context;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
 import android.renderscript.RenderScript;
+import android.renderscript.Type;
 
 public class Filter2D {
 	public Filter2D(Context ctx, float[] weights, float[] biases, byte[] patches, int numPatch, int filterW, int filterH, int patchW, int patchH){
@@ -18,13 +19,17 @@ public class Filter2D {
 		mBiasAlloc = Allocation.createSized(mRS, Element.F32(mRS), biases.length, Allocation.USAGE_SCRIPT);
 		mPatchAlloc = Allocation.createSized(mRS, Element.U8(mRS), patches.length, Allocation.USAGE_SCRIPT);
 		mResponseAlloc = Allocation.createSized(mRS, Element.F32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
-		mIndexAlloc = Allocation.createSized(mRS, Element.U32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
+		mRegularResponseAlloc = Allocation.createSized(mRS, Element.F32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
+		
+		mFilterIndexAlloc = Allocation.createSized(mRS, Element.U32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
+		mRegularizeIndexAlloc = Allocation.createSized(mRS, Element.U32(mRS), numPatch, Allocation.USAGE_SCRIPT);;
 		
 		mWeightAlloc.copyFrom(weights);
 		mBiasAlloc.copyFrom(biases);
 		mPatchAlloc.copyFrom(patches);
 		
 		int[] indice = new int[numPatch*responseSize];
+		int[] regularIndice = new int[numPatch];
 		
 		for (int i=0; i<numPatch; i++){
 			for (int k=0; k<(patchH-filterH+1); k++){
@@ -33,8 +38,10 @@ public class Filter2D {
 					indice[index] = index; 
 				}
 			}
+			regularIndice[i] = i;
 		}
-		mIndexAlloc.copyFrom(indice);
+		mFilterIndexAlloc.copyFrom(indice);
+		mRegularizeIndexAlloc.copyFrom(regularIndice);
 		
 		mScript.set_patchNum(numPatch);
 
@@ -54,20 +61,29 @@ public class Filter2D {
 		mScript.bind_gBiasList(mBiasAlloc);
 		mScript.bind_gPatchList(mPatchAlloc);
 		mScript.bind_gResponseList(mResponseAlloc);
+		mScript.bind_gRegularResponseList(mRegularResponseAlloc);
 	}
 	
 	public void setPatches(byte[] patches){
 		mPatchAlloc.copyFrom(patches);
 	}
 	
-	public void process(){
-		mScript.forEach_root(mIndexAlloc, mIndexAlloc);
-		mResponseAlloc.copyTo(mResponse);
+	public void process(boolean regularize){
+		mScript.forEach_filter(mFilterIndexAlloc);
+		
+		if (regularize){
+			mScript.forEach_regularize(mRegularizeIndexAlloc);
+			mRegularResponseAlloc.copyTo(mResponse);
+		}
+		else {
+			mResponseAlloc.copyTo(mResponse);
+		}
 	}
 	
 	public float[] gerResponseImages(){
 		return mResponse;
 	}
+	
 	
 	private RenderScript mRS;
 	private ScriptC_filter2d mScript;
@@ -76,7 +92,9 @@ public class Filter2D {
 	private Allocation mBiasAlloc;
 	private Allocation mPatchAlloc;
 	private Allocation mResponseAlloc;
-	private Allocation mIndexAlloc;
+	private Allocation mRegularResponseAlloc;
+	private Allocation mFilterIndexAlloc;
+	private Allocation mRegularizeIndexAlloc;
 	
 	private float[] mResponse;
 }
