@@ -15,18 +15,26 @@ public class Filter2D {
 		int responseSize = (patchW-filterW+1)*(patchH-filterH+1);
 		mResponse = new float[responseSize*numPatch];
 		
-		mWeightAlloc = Allocation.createSized(mRS, Element.F32(mRS), weights.length, Allocation.USAGE_SCRIPT);
-		mBiasAlloc = Allocation.createSized(mRS, Element.F32(mRS), biases.length, Allocation.USAGE_SCRIPT);
-		mPatchAlloc = Allocation.createSized(mRS, Element.U8(mRS), patches.length, Allocation.USAGE_SCRIPT);
+		mWeightAlloc = Allocation.createSized(mRS, Element.F32(mRS), filterW*filterH*numPatch, Allocation.USAGE_SCRIPT);
+		mBiasAlloc = Allocation.createSized(mRS, Element.F32(mRS), numPatch, Allocation.USAGE_SCRIPT);
+		mPatchAlloc = Allocation.createSized(mRS, Element.U8(mRS), patchW*patchH*numPatch, Allocation.USAGE_SCRIPT);
 		mResponseAlloc = Allocation.createSized(mRS, Element.F32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
 		mRegularResponseAlloc = Allocation.createSized(mRS, Element.F32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
 		
 		mFilterIndexAlloc = Allocation.createSized(mRS, Element.U32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
 		mRegularizeIndexAlloc = Allocation.createSized(mRS, Element.U32(mRS), numPatch, Allocation.USAGE_SCRIPT);;
 		
-		mWeightAlloc.copyFrom(weights);
-		mBiasAlloc.copyFrom(biases);
-		mPatchAlloc.copyFrom(patches);
+		if (null != weights){
+			mWeightAlloc.copyFrom(weights);
+		}
+		
+		if (null != biases){
+			mBiasAlloc.copyFrom(biases);
+		}
+		
+		if (null != patches){
+			mPatchAlloc.copyFrom(patches);
+		}
 		
 		int[] indice = new int[numPatch*responseSize];
 		int[] regularIndice = new int[numPatch];
@@ -64,8 +72,16 @@ public class Filter2D {
 		mScript.bind_gRegularResponseList(mRegularResponseAlloc);
 	}
 	
+	public void setModel(float[] weights, float[] biases){
+		mWeightAlloc.copyFrom(weights);
+		mBiasAlloc.copyFrom(biases);
+		mScript.bind_gWeightsList(mWeightAlloc);
+		mScript.bind_gBiasList(mBiasAlloc);
+	}
+	
 	public void setPatches(byte[] patches){
 		mPatchAlloc.copyFrom(patches);
+		mScript.bind_gPatchList(mPatchAlloc);
 	}
 	
 	public void process(boolean regularize){
