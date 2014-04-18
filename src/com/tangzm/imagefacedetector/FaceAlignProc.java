@@ -92,9 +92,11 @@ public class FaceAlignProc implements Plotable{
 		
 		mResponses = mFilter.gerResponseImages();
 		
-		//mTempPlot = doMeanShift(mResponses, mOrigPositions,100);
-		//mTempPlot = makeTestDate(mParams);
-		mExtraPositions = doChoosePeak(mResponses);
+		mExtraPositions = doMeanShift(mResponses, mOrigPositions,1);
+
+
+		//mExtraPositions = makeTestDate(mParams);
+		//mExtraPositions = doChoosePeak(mResponses);
 		Mat jacob = createJacobian(mParams);
 		
 		//mTempPlot = addM(mulM(jacob, mulM(jacob.inv(Core.DECOMP_SVD), subM(mTempPlot, mOrigPositions))), mOrigPositions);
@@ -106,7 +108,7 @@ public class FaceAlignProc implements Plotable{
 		Mat deltaParams = mulM(mulM((mulM(transJacob, jacob)).inv(Core.DECOMP_SVD), transJacob), deltaPos);
 		mExtraParams = addM(deltaParams, mParams);
 		regularizeParams(mExtraParams);
-		mExtraPositions = getShape(mExtraParams);
+		//mExtraPositions = getShape(mExtraParams);
 		
 		//mTempPlot = getShape(addM(mParams, mulM(jacob.inv(Core.DECOMP_SVD),subM(mTempPlot, mOrigPositions))));//addM(mParams, mulM(jacob.inv(Core.DECOMP_SVD),subM(mTempPlot, mOrigPositions)))
 		
@@ -155,7 +157,7 @@ public class FaceAlignProc implements Plotable{
 			int offsetX = -(SEARCH_WIN_W-1)/2;
 			int offsetY = -(SEARCH_WIN_H-1)/2;
 			
-			for (int i=44; i<45; i++){
+			for (int i=7; i<8; i++){
 				float centX = (float)((curr.get(i*2, 0))[0]);
 				float centY = (float)((curr.get(i*2+1, 0))[0]);
 				
@@ -472,9 +474,9 @@ public class FaceAlignProc implements Plotable{
 		float[] gaussKernel = new float[SEARCH_WIN_W*SEARCH_WIN_H];
 		
 		for (int i=0; i<mModel.numPts; i++){
+			
 			float startX = (float)(mOrigPositions.get(i*2, 0)[0] - (SEARCH_WIN_W-1)/2);
-			float startY = (float)(mOrigPositions.get(i*2+1, 0)[0] - (SEARCH_WIN_H-1)/2);
-					
+			float startY = (float)(mOrigPositions.get(i*2+1, 0)[0] - (SEARCH_WIN_H-1)/2);		
 			float dXBase = (float)(mOrigPositions.get(i*2, 0)[0] - currPositions.get(i*2, 0)[0] - (SEARCH_WIN_W-1)/2);
 			float dYBase = (float)(mOrigPositions.get(i*2+1, 0)[0] - currPositions.get(i*2+1, 0)[0] - (SEARCH_WIN_H-1)/2);
 			
@@ -489,9 +491,9 @@ public class FaceAlignProc implements Plotable{
 					float dX = dXBase+k;
 					float dY = dYBase+j;
 
+
 					gaussKernel[j*SEARCH_WIN_W + k] = (float)(Math.exp(-0.5*(dX*dX+dY*dY)/variance)) * 
-							responseImg[respImgOffset+j*SEARCH_WIN_W+k];
-					
+							responseImg[respImgOffset+j*SEARCH_WIN_W+k];					
 					
 					denominator += gaussKernel[j*SEARCH_WIN_W + k];
 				}
@@ -504,8 +506,11 @@ public class FaceAlignProc implements Plotable{
 				}
 			}
 			
-			newPositions.put(i*2, 0, numeratorX/denominator);
-			newPositions.put(i*2+1, 0, numeratorY/denominator);
+			float valx = numeratorX/denominator;
+			float valy = numeratorY/denominator;
+			
+			newPositions.put(i*2, 0, valx);
+			newPositions.put(i*2+1, 0, valy);
 		}
 		
 		return newPositions;
@@ -529,7 +534,8 @@ public class FaceAlignProc implements Plotable{
 					}
 				}
 			}
-			
+			float valx = (float)(mOrigPositions.get(i*2, 0)[0] - (SEARCH_WIN_W-1)/2) + peakX;
+			float valy = (float)(mOrigPositions.get(i*2+1, 0)[0] - (SEARCH_WIN_H-1)/2) + peakY;
 			newPositions.put(i*2, 0, (float)(mOrigPositions.get(i*2, 0)[0] - (SEARCH_WIN_W-1)/2) + peakX);
 			newPositions.put(i*2+1, 0, (float)(mOrigPositions.get(i*2+1, 0)[0] - (SEARCH_WIN_H-1)/2) + peakY);
 		}
@@ -708,7 +714,7 @@ public class FaceAlignProc implements Plotable{
 	private boolean mPlotPts = false;
 	
 	private boolean mPlotPatch = false;
-	private boolean mPlotResponse = false;
+	private boolean mPlotResponse = true;
 	
 	private boolean mPlotParams = true;
 	

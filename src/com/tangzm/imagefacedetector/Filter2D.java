@@ -69,10 +69,6 @@ public class Filter2D {
 		return mResponse;
 	}
 	
-	public float[] getResponseImage(int index){
-		return mResponse;
-	}
-	
 	private RenderScript mRS;
 	private ScriptC_filter2d mScript;
 	

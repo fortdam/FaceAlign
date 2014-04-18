@@ -92,12 +92,14 @@ public class MainActivity extends Activity implements OnClickListener{
 				proc = new FaceAlignProc();
 				proc.init(model);
 				proc.setPicture(currPic);
-				//proc.initialPicAlign(appCntx, 418, 952, 611, 945); //TZM old
+				proc.initialPicAlign(appCntx, 418, 952, 611, 945); //TZM old
 				//proc.initialPicAlign(appCntx, 444, 1076, 672, 1060); //TZM stretch mouth
 				//proc.initialPicAlign(appCntx, 438, 968, 744, 948);//TZM small eyes
-				proc.initialPicAlign(appCntx, 365, 840, 689, 844); //Frederic
-				for (int t=0; t<3; t++){
-				proc.search(false);
+				//proc.initialPicAlign(appCntx, 365, 840, 689, 844); //Frederic
+				//proc.initialPicAlign(appCntx, 1016, 1152, 1288, 1136);//km serious
+				//proc.initialPicAlign(appCntx, 902, 908, 1191, 946);//km happy
+				for (int t=0; t<1; t++){
+					proc.search(false);
 				}
 				imgFrame.addPlot(proc);
 			}
