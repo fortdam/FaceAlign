@@ -9,6 +9,9 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.PointF;
+import android.media.FaceDetector;
+import android.media.FaceDetector.Face;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
 import android.renderscript.RenderScript;
@@ -21,9 +24,6 @@ public class FaceAlignProc implements Plotable{
 	public void init(Context ctx, FaceModel model){
 		mModel = model;
 		
-		mCurrentParams = new Mat(mModel.numEVectors+4, 1, CvType.CV_32F, new Scalar(0));
-		mCurrentParams.put(0, 0, 1.0);
-		
         mFilter = new Filter2D(ctx, 
         		mModel.patchModel.weightsList, 
         		mModel.patchModel.biasList, 
@@ -35,7 +35,39 @@ public class FaceAlignProc implements Plotable{
         		(mModel.patchModel.sampleHeight+SEARCH_WIN_H-1));
 	}
 	
-	public void searchInImage(Context ctx, Bitmap image, float leftX, float leftY, float rightX, int rightY) throws Exception{
+	private float[] makeInitialGuess(Bitmap bmp){
+		float[] ret = new float[4];
+		Face[] faces = new Face[1];
+		int num = 0;
+		int width = bmp.getWidth();
+		int height = bmp.getHeight();
+		Bitmap processBmp = bmp.copy(Bitmap.Config.RGB_565, false);
+		FaceDetector detector = new FaceDetector(width, height, 1);
+		num = detector.findFaces(processBmp, faces);
+		
+		Face face = faces[0];
+		
+		PointF mid = new PointF();
+		face.getMidPoint(mid);
+		
+		ret[0] = mid.x - face.eyesDistance()/2;
+		ret[1] = mid.y;
+		ret[2] = mid.x + face.eyesDistance()/2;
+		ret[3] = mid.y;
+		return ret;
+	}
+	
+	public void searchInImage(Context ctx, Bitmap image) throws Exception{
+		float[] eyePositions = makeInitialGuess(image);
+		
+		if (null == eyePositions){
+			throw new Exception("Can not find face");
+		}
+		
+		searchInImage(ctx, image, eyePositions[0], eyePositions[1], eyePositions[2], eyePositions[3]);
+	}
+	
+	public void searchInImage(Context ctx, Bitmap image, float leftX, float leftY, float rightX, float rightY) throws Exception{
 		if (null == mModel){
 			throw new Exception("Not initialized");
 		}
@@ -66,6 +98,7 @@ public class FaceAlignProc implements Plotable{
         rightX *= scale;
         rightY *= scale;
         
+		mCurrentParams = new Mat(mModel.numEVectors+4, 1, CvType.CV_32F, new Scalar(0));
         mCurrentParams.put(0, 0, Math.cos(diffAngle));
         mCurrentParams.put(1, 0, Math.sin(diffAngle));
         mCurrentParams.put(2, 0, (rightX+leftX)/2-(meanRightX+meanLeftX)/2);

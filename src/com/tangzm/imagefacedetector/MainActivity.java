@@ -8,6 +8,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Bitmap.Config;
 import android.graphics.PointF;
 import android.media.FaceDetector;
 import android.media.FaceDetector.Face;
@@ -84,63 +85,33 @@ public class MainActivity extends Activity implements OnClickListener{
 		if (GALLERY_INTENT_ID == requestCode){
 			try{
 			    currPic = Media.getBitmap(getContentResolver(), data.getData());
+			    
+			    if (currPic.getWidth() > 1080 ) { //only for DiabloX yet
+			    	currPic = Bitmap.createScaledBitmap(currPic, 1080, 1920, false);
+			    }
 			}
 			catch(Exception e){
 				e.printStackTrace();
 			}
-			imgFrame.setImageBitmap(currPic);
-			
-			if (null == proc){
-				try {
-				proc = new FaceAlignProc();
-				proc.init(appCntx, model);
-				float[] eyes = makeInitialGuess(currPic);
-				//For temp now
-				if (true) {
-					proc.searchInImage(appCntx, currPic, (int)eyes[0],  (int)eyes[1], (int)eyes[2], (int)eyes[3]);
+			imgFrame.setImageBitmap(currPic);			
+
+			try {
+				if (null == proc) {
+					proc = new FaceAlignProc();
+					proc.init(appCntx, model);
 				}
-				else {
-				String temp = data.getData().toString();
-				if (temp.contains("127")){
-					proc.searchInImage(appCntx, currPic, 418, 952, 611, 945); //TZM old
-				}				
-				else if (temp.contains("128")){
-					proc.searchInImage(appCntx, currPic, 388, 946, 636, 956); //TZM old 50
-				}
-				else if (temp.contains("828")){
-					proc.searchInImage(appCntx, currPic, 365, 840, 689, 844); //Frederic
-				}
-				else if (temp.contains("833")){
-					proc.searchInImage(appCntx, currPic, 444, 1076, 672, 1060); //TZM stretch mouth
-				}
-				else if (temp.contains("834")){
-					proc.searchInImage(appCntx, currPic, 438, 968, 744, 948);//TZM small eyes
-				}
-				else if (temp.contains("838")){
-					proc.searchInImage(appCntx, currPic, 1016, 1152, 1288, 1136);//km serious
-				}
-				else if (temp.contains("836")){
-					proc.searchInImage(appCntx, currPic, 902, 908, 1191, 946);//km happy
-				}
-				else {
-					proc.searchInImage(appCntx, currPic, 418, 952, 611, 945); //TZM old
-				}
-				//proc.initialPicAlign(appCntx, 418, 952, 611, 945); //TZM old
-				//proc.initialPicAlign(appCntx, 444, 1076, 672, 1060); //TZM stretch mouth
-				//proc.initialPicAlign(appCntx, 438, 968, 744, 948);//TZM small eyes
-				//proc.initialPicAlign(appCntx, 365, 840, 689, 844); //Frederic
-				//proc.initialPicAlign(appCntx, 1016, 1152, 1288, 1136);//km serious
-				//proc.initialPicAlign(appCntx, 902, 908, 1191, 946);//km happy
-				}
+				
+				proc.searchInImage(appCntx, currPic);
+
 				for (int t=0; t<3; t++){
 					proc.optimize(Algorithm.ASM);
 				}
 				imgFrame.addPlot(proc);
-				}
-				catch(Exception e){
-					e.printStackTrace();
-				}
 			}
+			catch(Exception e){
+				e.printStackTrace();
+			}
+			
 		}
 	}
 
@@ -148,29 +119,5 @@ public class MainActivity extends Activity implements OnClickListener{
 		Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
 		intent.setType("image/*");
 		startActivityForResult(intent, GALLERY_INTENT_ID);
-	}
-	
-	private float[] makeInitialGuess(Bitmap bmp){
-		float[] ret = new float[4];
-		Face[] faces = new Face[1];
-		int num = 0;
-		int width = bmp.getWidth();
-		int height = bmp.getHeight();
-		Bitmap processBmp = bmp.copy(Bitmap.Config.RGB_565, false);
-		FaceDetector detector = new FaceDetector(width, height, 1);
-		num = detector.findFaces(processBmp, faces);
-		
-		Face face = faces[0];
-		
-		PointF mid = new PointF();
-		face.getMidPoint(mid);
-		
-		ret[0] = mid.x - face.eyesDistance()/2;
-		ret[1] = mid.y;
-		ret[2] = mid.x + face.eyesDistance()/2;
-		ret[3] = mid.y;
-		Log.i(TAG, "face"+faces[0]+ " "+num);
-		return ret;
-
 	}
 }
