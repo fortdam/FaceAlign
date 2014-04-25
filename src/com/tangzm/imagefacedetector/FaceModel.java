@@ -5,10 +5,10 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 
+import org.ejml.simple.SimpleMatrix;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
+
 
 import android.content.Context;
 
@@ -54,8 +54,8 @@ public class FaceModel {
 		
 		try{
 			 shapeModel = new ShapeModel(rawContent.getJSONObject(SHAPE_LABEL));
-			 numEVectors = shapeModel.eigenValues.length;
-			 numPts = shapeModel.meanShape.length/2;
+			 numEVectors = shapeModel.mEigenValues.numRows();
+			 numPts = shapeModel.mMeanShape.numRows()/2;
 			 
 			 pathModel = new PathModel(rawContent.getJSONObject(PATH_LABEL));
 			 patchModel = new PatchModel(rawContent.getJSONObject(PATCH_LABEL), numPts);
@@ -101,74 +101,55 @@ class PathModel {
 	private static final String NORM_LABEL = "normal";
 }
 
-class CvShape {
-	public Mat meanShape;
-	public Mat eigenVectors;
-	public Mat eigenValues;
-	public Mat eigenConstraints;
-}
 
 class ShapeModel {	
-	public float[] eigenValues;
-	public float[] eigenConstraints;
-	public float[][] eigenVectors;
-	public float[] meanShape;
 	
-	public CvShape cvData;
+	public SimpleMatrix mMeanShape;
+	public SimpleMatrix mEigenVectors;
+	public SimpleMatrix mEigenValues;
+	public SimpleMatrix mEigenConstraints;
 	
 	public ShapeModel(JSONObject shape){
+		double[] eigenValues;
+		double[] eigenConstraints;
+		double[][] eigenVectors;
+		double[] meanShape;
+		
 		try {
 			int numEvec = shape.getInt(EVEC_NUM_LABEL);
 			int numPts = shape.getInt(PTS_NUM_LABEL);
 			
-			eigenValues = new float[numEvec];
-			eigenConstraints = new float[numEvec];
-			eigenVectors = new float[numPts*2][numEvec];
-			meanShape = new float[numPts*2];
+			eigenValues = new double[numEvec];
+			eigenConstraints = new double[numEvec];
+			eigenVectors = new double[numPts*2][numEvec];
+			meanShape = new double[numPts*2];
 			
 			JSONArray evArray = shape.getJSONArray(EVALUE_LABEL);
 			for (int i=0; i<numEvec; i++){
-				eigenValues[i] = (float)(evArray.getDouble(i));
-				eigenConstraints[i] = (float)(Math.sqrt(eigenValues[i])*3);
+				eigenValues[i] = evArray.getDouble(i);
+				eigenConstraints[i] = Math.sqrt(eigenValues[i])*3;
 			}
 			
 			JSONArray evecArray = shape.getJSONArray(EVEC_LABEL);
 			for (int i=0; i<numPts*2; i++){
 				JSONArray evecItem = evecArray.getJSONArray(i);
 				for (int j=0; j<numEvec; j++){
-					eigenVectors[i][j] = (float)(evecItem.getDouble(j));
+					eigenVectors[i][j] = evecItem.getDouble(j);
 				}
 			}
 			
             JSONArray mean = shape.getJSONArray(MEAN_LABEL);
             for (int i=0; i<numPts; i++){
             	JSONArray point = mean.getJSONArray(i);
-            	meanShape[i*2] = (float)(point.getDouble(0));
-            	meanShape[i*2+1] = (float)(point.getDouble(1));
+            	meanShape[i*2] = point.getDouble(0);
+            	meanShape[i*2+1] = point.getDouble(1);
             }
             
-            if (true){
-            	cvData = new CvShape();
-            	
-            	cvData.meanShape = new Mat(numPts*2, 1, CvType.CV_32F);
-            	cvData.eigenValues = new Mat(numEvec, 1, CvType.CV_32F);
-            	cvData.eigenConstraints = new Mat(numEvec, 1, CvType.CV_32F);
-            	cvData.eigenVectors = new Mat(numPts*2, numEvec, CvType.CV_32F);
-            	
-            	for (int i=0; i<numPts*2; i++){
-            		cvData.meanShape.put(i, 0, meanShape[i]);
-            	}
-            	
-            	for (int i=0; i<numEvec; i++){
-            		cvData.eigenValues.put(i, 0, eigenValues[i]);
-            		cvData.eigenConstraints.put(i, 0, eigenConstraints);
-            	}
-            	
-            	for (int i=0; i<numPts*2; i++){
-            		for (int j=0; j<numEvec; j++){
-            			cvData.eigenVectors.put(i,j,eigenVectors[i][j]);
-            		}
-            	}
+            if (true){            	
+            	mMeanShape = new SimpleMatrix(numPts*2, 1, true, meanShape);
+            	mEigenValues = new SimpleMatrix(numEvec, 1, true, eigenValues);
+            	mEigenConstraints = new SimpleMatrix(numEvec, 1, true, eigenConstraints);
+            	mEigenVectors = new SimpleMatrix(eigenVectors);
             }
 		}
 		catch (Exception e){

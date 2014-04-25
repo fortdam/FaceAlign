@@ -1,9 +1,6 @@
 package com.tangzm.imagefacedetector;
 
-import org.opencv.core.Core;
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
-import org.opencv.core.Scalar;
+import org.ejml.simple.SimpleMatrix;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -24,7 +21,8 @@ public class FaceAlignProc implements Plotable{
 	public void init(Context ctx, FaceModel model){
 		mModel = model;
 		
-        mFilter = new Filter2D(ctx, 
+        mFilter = new Filter2D(
+        		ctx, 
         		mModel.patchModel.weightsList, 
         		mModel.patchModel.biasList, 
         		null, 
@@ -75,20 +73,20 @@ public class FaceAlignProc implements Plotable{
 		int leftEyeIndex = mModel.pathModel.paths[mModel.pathModel.paths.length-2][0];
 		int rightEyeIndex = mModel.pathModel.paths[mModel.pathModel.paths.length-1][0];
 		
-		float meanLeftX = (float)((mModel.shapeModel.cvData.meanShape.get(leftEyeIndex*2, 0))[0]);
-		float meanLeftY = (float)((mModel.shapeModel.cvData.meanShape.get(leftEyeIndex*2+1, 0))[0]);
-		float meanRightX = (float)((mModel.shapeModel.cvData.meanShape.get(rightEyeIndex*2, 0))[0]);
-		float meanRightY = (float)((mModel.shapeModel.cvData.meanShape.get(rightEyeIndex*2+1, 0))[0]);	
+		double meanLeftX = mModel.shapeModel.mMeanShape.get(leftEyeIndex*2);
+        double meanLeftY = mModel.shapeModel.mMeanShape.get(leftEyeIndex*2+1);
+        double meanRightX = mModel.shapeModel.mMeanShape.get(rightEyeIndex*2);
+        double meanRightY = mModel.shapeModel.mMeanShape.get(rightEyeIndex*2+1);
 		
-		float meanAngle = (float)(Math.atan((meanRightY-meanLeftY)/(meanRightX-meanLeftX)));
-		float currAngle = (float)(Math.atan((rightY-leftY)/(rightX-leftX)));
+		double meanAngle = Math.atan((meanRightY-meanLeftY)/(meanRightX-meanLeftX));
+		double currAngle = Math.atan((rightY-leftY)/(rightX-leftX));
 		
-		float diffAngle = currAngle - meanAngle;
+		double diffAngle = currAngle - meanAngle;
 		
-        float meanDist = (float)(Math.hypot(meanRightX-meanLeftX, meanRightY-meanLeftY));
-        float currDist = (float)(Math.hypot(rightX-leftX, rightY-leftY));
+        double meanDist = Math.hypot(meanRightX-meanLeftX, meanRightY-meanLeftY);
+        double currDist = Math.hypot(rightX-leftX, rightY-leftY);
         
-        float scale = meanDist/currDist;
+        double scale = meanDist/currDist;
         mScaleFactor = scale;
         
         Bitmap imgProcess = Bitmap.createScaledBitmap(image, (int)(image.getWidth()*scale), (int)(image.getHeight()*scale), true);
@@ -98,11 +96,12 @@ public class FaceAlignProc implements Plotable{
         rightX *= scale;
         rightY *= scale;
         
-		mCurrentParams = new Mat(mModel.numEVectors+4, 1, CvType.CV_32F, new Scalar(0));
-        mCurrentParams.put(0, 0, Math.cos(diffAngle));
-        mCurrentParams.put(1, 0, Math.sin(diffAngle));
-        mCurrentParams.put(2, 0, (rightX+leftX)/2-(meanRightX+meanLeftX)/2);
-        mCurrentParams.put(3, 0, (rightY+leftY)/2-(meanRightY+meanLeftY)/2);
+		mCurrentParams = new SimpleMatrix(mModel.numEVectors+4, 1);
+		
+		mCurrentParams.set(0, Math.cos(diffAngle)); //Alpha * cos(theta)
+		mCurrentParams.set(1, Math.sin(diffAngle)); //Alpha * sin(theta)
+		mCurrentParams.set(2, (rightX+leftX)/2-(meanRightX+meanLeftX)/2); //translate X
+		mCurrentParams.set(3, (rightY+leftY)/2-(meanRightY+meanLeftY)/2);  //translate Y
         
         mImageW = imgProcess.getWidth();
         mImageH = imgProcess.getHeight();
@@ -119,69 +118,71 @@ public class FaceAlignProc implements Plotable{
         outAlloc.copyTo(mImgGrayScaled);		
         
         mCurrentPositions = getCurrentShape();
-        mOriginalPositions = mCurrentPositions.clone();
+        mOriginalPositions = new SimpleMatrix(mCurrentPositions);
 	}
 	
-	private Mat getShape(final Mat params){
-		Mat translate = getTranslateM(params);
-		Mat sr = getScaleRotateM(params);
-		Mat deviation = params.rowRange(4, mModel.numEVectors+4);
-		CvShape s = mModel.shapeModel.cvData;
+	private SimpleMatrix getShape(final SimpleMatrix params){
+		SimpleMatrix translate = getTranslateM(params);
+		SimpleMatrix sr = getScaleRotateM(params);
+		SimpleMatrix deviation = params.extractMatrix(4, mModel.numEVectors+4, 0, 1);
 		
-		return addM(mulM(sr, addM(s.meanShape, mulM(s.eigenVectors, deviation))), translate);		
+		SimpleMatrix evec = mModel.shapeModel.mEigenVectors;
+		SimpleMatrix mean = mModel.shapeModel.mMeanShape;
+		
+		return sr.mult(mean.plus(evec.mult(deviation))).plus(translate);
 	}
 	
-	private Mat getCurrentShape(){
+	private SimpleMatrix getCurrentShape(){
 		return getShape(mCurrentParams);
 	}
 	
-	private Mat regularizeParams(Mat params){
+	private SimpleMatrix regularizeParams(SimpleMatrix params){
 		for (int i=0; i<mModel.numEVectors; i++){
-			double value = params.get(i+4, 0)[0];
-			double constrain = mModel.shapeModel.eigenConstraints[i];
+			double value = params.get(i+4);
+			double constrain = mModel.shapeModel.mEigenConstraints.get(i);
 			
 			if (value > constrain){
-				params.put(i+4, 0, constrain);
+				params.set(i+4, constrain);
 			}
 			else if (value < -constrain){
-				params.put(i+4, 0, -constrain);
+				params.set(i+4, -constrain);
 			}
 		}
 		return params;
 	}
 	
-	private void updateCurrent(Mat newPositions){
-		Mat jacob = createJacobian(mCurrentParams);
-		Mat transJacob = jacob.t();
+	private void updateCurrent(SimpleMatrix newPositions){
+		SimpleMatrix jacob = createJacobian(mCurrentParams);
+		SimpleMatrix transJacob = jacob.transpose();
 		
-		Mat deltaParams = mulM(mulM((mulM(transJacob, jacob)).inv(Core.DECOMP_SVD), transJacob), subM(newPositions, mCurrentPositions));
-		
-		mCurrentParams = regularizeParams(addM(deltaParams, mCurrentParams));
+		SimpleMatrix deltaParams = transJacob.mult(jacob).pseudoInverse().mult(transJacob).mult(newPositions.minus(mCurrentPositions));
+
+		mCurrentParams = regularizeParams(deltaParams.plus(mCurrentParams));
 		mCurrentPositions = getShape(mCurrentParams);
 	}
 	
-	private Mat doMeanShift(final float[] responseImg, final Mat currPositions, final int variance){
-		Mat newPositions = new Mat(mModel.numPts*2, 1, CvType.CV_32F, new Scalar(0));
+	private SimpleMatrix doMeanShift(final float[] responseImg, final SimpleMatrix currPositions, final int variance){
+		SimpleMatrix newPositions = new SimpleMatrix(mModel.numPts*2, 1);
 		
 		float[] gaussKernel = new float[SEARCH_WIN_W*SEARCH_WIN_H];
 		
 		for (int i=0; i<mModel.numPts; i++){
 			
-			float startX = (float)(mCropPositions.get(i*2, 0)[0] - (SEARCH_WIN_W-1)/2);
-			float startY = (float)(mCropPositions.get(i*2+1, 0)[0] - (SEARCH_WIN_H-1)/2);		
-			float dXBase = (float)(mCropPositions.get(i*2, 0)[0] - currPositions.get(i*2, 0)[0] - (SEARCH_WIN_W-1)/2);
-			float dYBase = (float)(mCropPositions.get(i*2+1, 0)[0] - currPositions.get(i*2+1, 0)[0] - (SEARCH_WIN_H-1)/2);
+			double startX = mCropPositions.get(i*2) - (SEARCH_WIN_W-1)/2;
+			double startY = mCropPositions.get(i*2+1)- (SEARCH_WIN_H-1)/2;		
+			double dXBase = mCropPositions.get(i*2) - currPositions.get(i*2) - (SEARCH_WIN_W-1)/2;
+			double dYBase = mCropPositions.get(i*2+1) - currPositions.get(i*2+1) - (SEARCH_WIN_H-1)/2;
 			
 			int respImgOffset = i*SEARCH_WIN_W*SEARCH_WIN_H;
 			
-			float denominator = 0;
-			float numeratorX = 0;
-			float numeratorY = 0;
+			double denominator = 0;
+			double numeratorX = 0;
+			double numeratorY = 0;
 			
 			for (int j=0; j<SEARCH_WIN_H; j++){
 				for (int k=0; k<SEARCH_WIN_W; k++){
-					float dX = dXBase+k;
-					float dY = dYBase+j;
+					double dX = dXBase+k;
+					double dY = dYBase+j;
 
 
 					gaussKernel[j*SEARCH_WIN_W + k] = (float)(Math.exp(-0.5*(dX*dX+dY*dY)/variance)) * 
@@ -198,8 +199,8 @@ public class FaceAlignProc implements Plotable{
 				}
 			}
 
-			newPositions.put(i*2, 0, numeratorX/denominator);
-			newPositions.put(i*2+1, 0, numeratorY/denominator);
+			newPositions.set(i*2, numeratorX/denominator);
+			newPositions.set(i*2+1, numeratorY/denominator);
 		}
 		
 		return newPositions;
@@ -211,11 +212,11 @@ public class FaceAlignProc implements Plotable{
 		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 1));
 	}
 	
-	private Mat doChoosePeak(final float[] responseImg){
-		Mat newPositions = new Mat(mModel.numPts*2, 1, CvType.CV_32F, new Scalar(0));
+	private SimpleMatrix doChoosePeak(final float[] responseImg){
+		SimpleMatrix newPositions = new SimpleMatrix(mModel.numPts*2, 1);
 				
 		for (int i=0; i<mModel.numPts; i++){
-			float peak = 0;
+			double peak = 0;
 			int peakX = 0;
 			int peakY = 0;
 			int respImgOffset = i*SEARCH_WIN_W*SEARCH_WIN_H;
@@ -230,8 +231,8 @@ public class FaceAlignProc implements Plotable{
 				}
 			}
 
-			newPositions.put(i*2, 0, (float)(mCropPositions.get(i*2, 0)[0] - (SEARCH_WIN_W-1)/2) + peakX);
-			newPositions.put(i*2+1, 0, (float)(mCropPositions.get(i*2+1, 0)[0] - (SEARCH_WIN_H-1)/2) + peakY);
+			newPositions.set(i*2, 0, mCropPositions.get(i*2) - (SEARCH_WIN_W-1)/2 + peakX);
+			newPositions.set(i*2+1, 0, mCropPositions.get(i*2+1) - (SEARCH_WIN_H-1)/2 + peakY);
 		}
 		
 		return newPositions;
@@ -260,69 +261,22 @@ public class FaceAlignProc implements Plotable{
 		
 	}
 	
-
 	
-	private Mat mulM(final Mat A, final Mat B){
-		int h = A.height();
-		int w = B.width();
-		int type = A.type();
-		
-		Mat result = new Mat(h, w, type);
-		
-		for (int i=0; i<h; i++){
-			for (int j=0; j<w; j++){
-				float a = (float)(A.row(i).dot(B.col(j).t()));
-				result.put(i, j, a);
-			}
-		}
-		return result;
-	}
-	
-	private Mat addM(final Mat A, final Mat B){
-		Mat result = A.clone();
-		
-		for (int i=0; i<A.height(); i++){
-			for (int j=0; j<A.width(); j++){
-				float[] val = {1.0f};
-				float x,y;
-				A.get(i, j, val);
-				x = val[0];
-				B.get(i, j, val);
-				y = val[0];
-				result.put(i, j, x+y);
-			}
-		}
-		
-		return result;
-	}
-	
-	private Mat subM(final Mat A, final Mat B){
-		Mat result = A.clone();
-		
-		for (int i=0; i<A.height(); i++){
-			for (int j=0; j<A.width(); j++){
-				result.put(i, j, A.get(i, j)[0] - B.get(i, j)[0]);
-			}
-		}
-		
-		return result;
-	}
-	
-	private Mat getScaleRotateM(final Mat params){
+	private SimpleMatrix getScaleRotateM(final SimpleMatrix params){
 		return getScaleRotateM(params, 1, 0);
 	}
 	
-	private Mat getScaleRotateM(final float scale, final float theta){
+	private SimpleMatrix getScaleRotateM(final double scale, final double theta){
 		return getScaleRotateM(null, scale, theta);
 	}
 	
-	private Mat getScaleRotateM(final Mat params, final float scale, final float theta){		
-        float scaleFactor = scale;
-        float rotateAngle = theta;
+	private SimpleMatrix getScaleRotateM(final SimpleMatrix params, final double scale, final double theta){		
+        double scaleFactor = scale;
+        double rotateAngle = theta;
         
         if (params!=null){
-    		float a = (float)(params.get(0, 0)[0]);	
-            float b = (float)(params.get(1, 0)[0]);
+    		double a = params.get(0, 0);	
+            double b = params.get(1, 0);
             
             scaleFactor *= Math.sqrt(a*a + b*b);
             
@@ -334,47 +288,47 @@ public class FaceAlignProc implements Plotable{
         double v1 = scaleFactor * Math.cos(rotateAngle);
         double v2 = scaleFactor * Math.sin(rotateAngle);
         
-		Mat result = Mat.zeros(mModel.numPts*2, mModel.numPts*2, CvType.CV_32F);
+		SimpleMatrix result = new SimpleMatrix(mModel.numPts*2, mModel.numPts*2);
+		result.set(0);
 		
 		for (int i=0; i<mModel.numPts; i++){
-			result.put(i*2, i*2, v1);
-			result.put(i*2+1, i*2+1, v1);	
-
-			result.put(i*2, i*2+1, -v2);
-			result.put(i*2+1, i*2, v2);
+			result.set(i*2, i*2, v1);
+			result.set(i*2+1, i*2+1, v1);	
+			result.set(i*2, i*2+1, -v2);
+			result.set(i*2+1, i*2, v2);
 		}
 		
 		return result;
 	}
 
-	private Mat getTranslateM(final Mat params){
+	private SimpleMatrix getTranslateM(final SimpleMatrix params){
 		return getTranslateM(params, 0, 0);
 	}
 	
-	private Mat getTranslateM(final float offsetX, final float offsetY){
+	private SimpleMatrix getTranslateM(final double offsetX, final double offsetY){
 		return getTranslateM(null, offsetX, offsetY);
 	}
 	
-	private Mat getTranslateM(final Mat params, final float offsetX, final float offsetY){
-		float x =  offsetX;
-		float y =  offsetY;
+	private SimpleMatrix getTranslateM(final SimpleMatrix params, final double offsetX, final double offsetY){
+		double x =  offsetX;
+		double y =  offsetY;
 		
 		if (params != null){
-			x += (float)(params.get(2, 0)[0]);
-			y += (float)(params.get(3, 0)[0]);
+			x += params.get(2,0);
+			y += params.get(3, 0);
 		}
 		
-		Mat result = Mat.zeros(mModel.numPts*2, 1, CvType.CV_32F);
+		SimpleMatrix result = new SimpleMatrix(mModel.numPts*2, 1);
 		for (int i=0; i<mModel.numPts; i++){
-			result.put(i*2, 0, x);
-			result.put(i*2+1, 0, y);
+			result.set(i*2, 0, x);
+			result.set(i*2+1, 0, y);
 		}
 		
 		return result;
 	}
 	
 	private byte[] cropPatches(){
-		Mat currShape = getCurrentShape();
+		SimpleMatrix currShape = getCurrentShape();
 		
 		int filterW = mModel.patchModel.sampleWidth;
 		int filterH = mModel.patchModel.sampleHeight;
@@ -387,10 +341,12 @@ public class FaceAlignProc implements Plotable{
 		mCropPositions = currShape;
 		
 		for (int i=0; i<mModel.numPts; i++){
+			int centerX = (int)(currShape.get(i*2));
+			int centerY = (int)(currShape.get(i*2+1));
 			for (int j=0; j<patchH; j++){
 				for (int k=0; k<patchW; k++){
-					int posX = (int)((currShape.get(i*2, 0))[0]) + shiftW + k;
-					int posY = (int)((currShape.get(i*2+1, 0))[0]) + shiftH + j;
+					int posX =  centerX + shiftW + k;
+					int posY =  centerY + shiftH + j;
 					
 					if (posX<0 || posY<0 || posX>mImageW || posY>mImageH){ //out of image
 						ret[i*patchW*patchH+j*patchW+k] = 0; //set as black
@@ -404,49 +360,49 @@ public class FaceAlignProc implements Plotable{
 		return ret;
 	}
 	
-	private Mat createJacobian (final Mat params){
-		Mat jac = new Mat(mModel.numPts*2, mCurrentParams.rows(), CvType.CV_32F);
+	private SimpleMatrix createJacobian (final SimpleMatrix params){
+		SimpleMatrix jac = new SimpleMatrix(mModel.numPts*2, mCurrentParams.numRows());
 		double j0,j1;
 		
-		Mat meanShape = mModel.shapeModel.cvData.meanShape;
-		Mat eigenVectors = mModel.shapeModel.cvData.eigenVectors;
+		SimpleMatrix meanShape = mModel.shapeModel.mMeanShape;
+		SimpleMatrix eigenVectors = mModel.shapeModel.mEigenVectors;
 		
 		for (int i=0; i<mModel.numPts; i++){
 			//1
-			j0 = meanShape.get(i*2, 0)[0];
-			j1 = meanShape.get(i*2+1, 0)[0];
+			j0 = meanShape.get(i*2);
+			j1 = meanShape.get(i*2+1);
 			
-			for (int j=0; j<eigenVectors.cols(); j++){
-				j0 += params.get(j+4, 0)[0]*eigenVectors.get(i*2, j)[0];
-				j1 += params.get(j+4, 0)[0]*eigenVectors.get(i*2+1, j)[0];
+			for (int j=0; j<eigenVectors.numCols(); j++){
+				j0 += params.get(j+4)*eigenVectors.get(i*2, j);
+				j1 += params.get(j+4)*eigenVectors.get(i*2+1, j);
 			}
-			jac.put(i*2, 0, j0);
-			jac.put(i*2+1, 0, j1);
+			jac.set(i*2, 0, j0);
+			jac.set(i*2+1, 0, j1);
 			
 			//2
-			j0 = meanShape.get(i*2+1, 0)[0];
-			j1 = meanShape.get(i*2, 0)[0];	
+			j0 = meanShape.get(i*2+1);
+			j1 = meanShape.get(i*2);	
 			
-			for (int j=0; j<eigenVectors.cols(); j++){
-				j0 += params.get(j+4, 0)[0]*eigenVectors.get(i*2+1, j)[0];
-				j1 += params.get(j+4, 0)[0]*eigenVectors.get(i*2, j)[0];
+			for (int j=0; j<eigenVectors.numCols(); j++){
+				j0 += params.get(j+4)*eigenVectors.get(i*2+1, j);
+				j1 += params.get(j+4)*eigenVectors.get(i*2, j);
 			}
-			jac.put(i*2, 1, -j0);
-			jac.put(i*2+1, 1, j1);
+			jac.set(i*2, 1, -j0);
+			jac.set(i*2+1, 1, j1);
 			
 			//3
-			jac.put(i*2, 2, 1);
-			jac.put(i*2+1, 2, 0);
+			jac.set(i*2, 2, 1);
+			jac.set(i*2+1, 2, 0);
 			
 			//4
-			jac.put(i*2, 3, 0);
-			jac.put(i*2+1, 3, 1);
+			jac.set(i*2, 3, 0);
+			jac.set(i*2+1, 3, 1);
 			
-			for (int j=0; j<eigenVectors.cols(); j++){
-				j0 = params.get(0, 0)[0]*eigenVectors.get(i*2, j)[0] - params.get(1, 0)[0]*eigenVectors.get(i*2+1, j)[0];
-				j1 = params.get(0, 0)[0]*eigenVectors.get(i*2+1, j)[0] + params.get(1, 0)[0]*eigenVectors.get(i*2, j)[0];
-				jac.put(i*2, 4+j, j0);
-				jac.put(i*2+1, 4+j, j1);
+			for (int j=0; j<eigenVectors.numCols(); j++){
+				j0 = params.get(0)*eigenVectors.get(i*2, j) - params.get(1)*eigenVectors.get(i*2+1, j);
+				j1 = params.get(0)*eigenVectors.get(i*2+1, j) + params.get(1)*eigenVectors.get(i*2, j);
+				jac.set(i*2, 4+j, j0);
+				jac.set(i*2+1, 4+j, j1);
 			}
 		}
 		
@@ -454,12 +410,12 @@ public class FaceAlignProc implements Plotable{
 	}
 	
 	//For test only
-	private Mat makeTestDate(Mat params) {
-		Mat ret = new Mat(mModel.numPts*2, 1, CvType.CV_32F);
+	private SimpleMatrix makeTestDate(SimpleMatrix params) {
+		SimpleMatrix ret = new SimpleMatrix(mModel.numPts*2, 1);
 		
-		Mat translate;
-		Mat sr;
-		Mat deviation = params.rowRange(4, mModel.numEVectors+4).clone();
+		SimpleMatrix translate;
+		SimpleMatrix sr;
+		SimpleMatrix deviation = new SimpleMatrix(params.extractMatrix(4, mModel.numEVectors+4, 0, 1));
 		
 		//Test translate
 		if (true){
@@ -530,21 +486,19 @@ public class FaceAlignProc implements Plotable{
 			
 			for (int i=0; i<values.length; i++){
 				if (Math.abs(values[i]) > 0.0001){
-				    deviation.put(i, 0, deviation.get(i, 0)[0] + values[i]);
+				    deviation.set(i, deviation.get(i) + values[i]);
 				}
 			}
 		}
 		else{
 			
 		}
-		
-		CvShape s = mModel.shapeModel.cvData;
-		
-		return addM(mulM(sr, addM(s.meanShape, mulM(s.eigenVectors, deviation))), translate);		
+				
+		return sr.mult(mModel.shapeModel.mMeanShape.plus(mModel.shapeModel.mEigenVectors.mult(deviation))).plus(translate);
 	}
 	
 	public void plot(Canvas canvas, Paint paint){		
-		CvShape s = mModel.shapeModel.cvData;
+		ShapeModel s = mModel.shapeModel;
 		PathModel path = mModel.pathModel;
 		
 
@@ -556,21 +510,21 @@ public class FaceAlignProc implements Plotable{
 			int offsetY = -(SEARCH_WIN_H+mModel.patchModel.sampleHeight-1)/2;
 			
 			for (int i=0; i<mModel.numPts; i++){
-				float centX = (float)((mCropPositions.get(i*2, 0))[0]);
-				float centY = (float)((mCropPositions.get(i*2+1, 0))[0]);
+				double centX = mCropPositions.get(i*2);
+				double centY = mCropPositions.get(i*2+1);
 				
 				for (int j=0; j<SEARCH_WIN_H+mModel.patchModel.sampleHeight-1; j++){
 					for (int k=0; k<(SEARCH_WIN_W+mModel.patchModel.sampleWidth-1); k++){
 						int color = (patches[i*(SEARCH_WIN_W+mModel.patchModel.sampleWidth-1)*(SEARCH_WIN_H+mModel.patchModel.sampleHeight-1)+
 						                    (SEARCH_WIN_W+mModel.patchModel.sampleWidth-1)*j+k])&0xFF;
 						
-						float left = (centX + k + offsetX)/mScaleFactor;
-						float top = (centY + j + offsetY)/mScaleFactor;
-						float right = (centX + k + offsetX + 1)/mScaleFactor;
-						float bottom = (centY + j + offsetY + 1)/mScaleFactor;
+						double left = (centX + k + offsetX)/mScaleFactor;
+						double top = (centY + j + offsetY)/mScaleFactor;
+						double right = (centX + k + offsetX + 1)/mScaleFactor;
+						double bottom = (centY + j + offsetY + 1)/mScaleFactor;
 								
 						pt.setARGB(0xff, color, color, color);
-						canvas.drawRect(left, top, right, bottom, pt);
+						canvas.drawRect((float)left, (float)top, (float)right, (float)bottom, pt);
 					}
 				}
 			}
@@ -583,20 +537,20 @@ public class FaceAlignProc implements Plotable{
 			int offsetY = -(SEARCH_WIN_H-1)/2;
 			
 			for (int i=7; i<8; i++){
-				float centX = (float)((mCropPositions.get(i*2, 0))[0]);
-				float centY = (float)((mCropPositions.get(i*2+1, 0))[0]);
+				double centX = mCropPositions.get(i*2);
+				double centY = mCropPositions.get(i*2+1);
 				
 				for (int j=0; j<SEARCH_WIN_H; j++){
 					for (int k=0; k<SEARCH_WIN_W; k++){
 						int color = (int)((255*responses[i*SEARCH_WIN_W*SEARCH_WIN_H+j*SEARCH_WIN_W+k]));
 						
-						float left = (centX + k + offsetX)/mScaleFactor;
-						float top = (centY + j + offsetY)/mScaleFactor;
-						float right = (centX + k + offsetX + 1)/mScaleFactor;
-						float bottom = (centY + j + offsetY + 1)/mScaleFactor;
+						double left = (centX + k + offsetX)/mScaleFactor;
+						double top = (centY + j + offsetY)/mScaleFactor;
+						double right = (centX + k + offsetX + 1)/mScaleFactor;
+						double bottom = (centY + j + offsetY + 1)/mScaleFactor;
 						
 						pt.setARGB(0xff, color, color, color);
-						canvas.drawRect(left, top, right, bottom, pt);
+						canvas.drawRect((float)left, (float)top, (float)right, (float)bottom, pt);
 					}
 				}
 			}
@@ -611,22 +565,22 @@ public class FaceAlignProc implements Plotable{
 					pt.setColor(0xFFFF0000);
 
 					for (int j=1; j<path.paths[i].length; j++){
-						float startX = (float)((mOriginalPositions.get(path.paths[i][j-1]*2, 0))[0]);
-						float startY = (float)((mOriginalPositions.get(path.paths[i][j-1]*2+1, 0))[0]);
-						float endX = (float)((mOriginalPositions.get(path.paths[i][j]*2, 0))[0]);
-						float endY = (float)((mOriginalPositions.get(path.paths[i][j]*2+1, 0))[0]);
-						canvas.drawLine(startX/mScaleFactor, (float)(startY/mScaleFactor), (float)(endX/mScaleFactor), (float)(endY/mScaleFactor), pt);
+						double startX = mOriginalPositions.get(path.paths[i][j-1]*2);
+						double startY = mOriginalPositions.get(path.paths[i][j-1]*2+1);
+						double endX = mOriginalPositions.get(path.paths[i][j]*2);
+						double endY = mOriginalPositions.get(path.paths[i][j]*2+1);
+						canvas.drawLine((float)(startX/mScaleFactor), (float)(startY/mScaleFactor), (float)(endX/mScaleFactor), (float)(endY/mScaleFactor), pt);
 					}				
 				}
 				
 				pt.setColor(0xFF00FF00);
 				
 				for (int j=1; j<path.paths[i].length; j++){
-					float startX = (float)((mCurrentPositions.get(path.paths[i][j-1]*2, 0))[0]);
-					float startY = (float)((mCurrentPositions.get(path.paths[i][j-1]*2+1, 0))[0]);
-					float endX = (float)((mCurrentPositions.get(path.paths[i][j]*2, 0))[0]);
-					float endY = (float)((mCurrentPositions.get(path.paths[i][j]*2+1, 0))[0]);
-					canvas.drawLine(startX/mScaleFactor, (float)(startY/mScaleFactor), (float)(endX/mScaleFactor), (float)(endY/mScaleFactor), pt);
+					double startX = mCurrentPositions.get(path.paths[i][j-1]*2);
+					double startY = mCurrentPositions.get(path.paths[i][j-1]*2+1);
+					double endX = mCurrentPositions.get(path.paths[i][j]*2);
+					double endY = mCurrentPositions.get(path.paths[i][j]*2+1);
+					canvas.drawLine((float)(startX/mScaleFactor), (float)(startY/mScaleFactor), (float)(endX/mScaleFactor), (float)(endY/mScaleFactor), pt);
 				}
 				
 				
@@ -639,18 +593,18 @@ public class FaceAlignProc implements Plotable{
 				pt.setColor(0xFFFF0000);
 
 				for (int i=0; i<mModel.numPts; i++){
-					float centX = (float)((mOriginalPositions.get(i*2, 0))[0]);
-					float centY = (float)((mOriginalPositions.get(i*2+1, 0))[0]);
-					canvas.drawText(""+i, centX/mScaleFactor, centY/mScaleFactor, pt);
+					double centX = mOriginalPositions.get(i*2);
+					double centY = mOriginalPositions.get(i*2+1);
+					canvas.drawText(""+i, (float)(centX/mScaleFactor), (float)(centY/mScaleFactor), pt);
 				}
 			}
 			
 			pt.setColor(0xFF00FF00);
 
 			for (int i=0; i<mModel.numPts; i++){
-				float centX = (float)((mCurrentPositions.get(i*2, 0))[0]);
-				float centY = (float)((mCurrentPositions.get(i*2+1, 0))[0]);
-				canvas.drawText(""+i, centX/mScaleFactor, centY/mScaleFactor, pt);
+				double centX = mCurrentPositions.get(i*2);
+				double centY = mCurrentPositions.get(i*2+1);
+				canvas.drawText(""+i, (float)(centX/mScaleFactor), (float)(centY/mScaleFactor), pt);
 			}
 			
 
@@ -736,7 +690,7 @@ public class FaceAlignProc implements Plotable{
 			};
 			
 			for (int i=0; i<paramsLimit.length; i++){
-				int value = (int)((mCurrentParams.get(i+4, 0)[0] * 50)/paramsLimit[i]) + 50;
+				int value = (int)((mCurrentParams.get(i+4) * 50)/paramsLimit[i]) + 50;
 				
 				canvas.drawText(paramLabels[i] + value + "/100", 0, (i+1)*(font+5), pt);		
 			}
@@ -756,15 +710,15 @@ public class FaceAlignProc implements Plotable{
 	private int mImageW;
 	private int mImageH;
 	private byte[] mImgGrayScaled;
-	private float mScaleFactor;
+	private double mScaleFactor;
 	
 	private FaceModel mModel;
 	
 	//Fit data / result
-	private Mat mOriginalPositions; //The positions for initial guess
-	private Mat mCropPositions;   //The positions for patch cropped
-	private Mat mCurrentPositions;  //The positions for current calculated
-	private Mat mCurrentParams;
+	private SimpleMatrix mOriginalPositions; //The positions for initial guess
+	private SimpleMatrix mCropPositions;   //The positions for patch cropped
+	private SimpleMatrix mCurrentPositions;  //The positions for current calculated
+	private SimpleMatrix mCurrentParams;
 		
 	private Filter2D mFilter;
 	
