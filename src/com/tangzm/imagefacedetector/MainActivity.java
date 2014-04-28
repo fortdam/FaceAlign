@@ -2,7 +2,6 @@ package com.tangzm.imagefacedetector;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
-import org.opencv.android.OpenCVLoader;
 
 import android.app.Activity;
 import android.content.Context;
@@ -33,24 +32,6 @@ public class MainActivity extends Activity implements OnClickListener{
 	private Bitmap currPic = null;
 	private Context appCntx = null;
 	
-	 private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
-	        @Override
-	        public void onManagerConnected(int status) {
-	            switch (status) {
-	                case LoaderCallbackInterface.SUCCESS:
-	                {
-	                    Log.i(TAG, "OpenCV loaded successfully");
-	            		model = new FaceModel(appCntx, R.raw.model); //now the model is loaded synchronously	            		
-	            		//Log.e(TAG, proc.getCurrentShape().dump());
-	                } 
-	                break;
-	                default:
-	                {
-	                    super.onManagerConnected(status);
-	                } break;
-	            }
-	        }
-	    };
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -66,7 +47,7 @@ public class MainActivity extends Activity implements OnClickListener{
 	@Override
 	protected void onResume(){
 		super.onResume();
-		OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_2_4_8, this, mLoaderCallback);
+		model = new FaceModel(appCntx, R.raw.model);
 	}
 
 	@Override
@@ -97,6 +78,7 @@ public class MainActivity extends Activity implements OnClickListener{
 			imgFrame.setImageBitmap(currPic);			
 
 			try {
+				FuncTracer.startProcess("Fit");
 				if (null == proc) {
 					proc = new FaceAlignProc();
 					proc.init(appCntx, model);
@@ -109,6 +91,7 @@ public class MainActivity extends Activity implements OnClickListener{
 					proc.optimize(Algorithm.ASM);
 				}
 				//Debug.stopMethodTracing();
+				FuncTracer.endProc("Fit");
 				imgFrame.addPlot(proc);
 			}
 			catch(Exception e){

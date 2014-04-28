@@ -151,7 +151,8 @@ public class FaceAlignProc implements Plotable{
 		return getShape(mCurrentParams);
 	}
 	
-	private SimpleMatrix regularizeParams(SimpleMatrix params){		
+	private SimpleMatrix regularizeParams(SimpleMatrix params){	
+		FuncTracer.startFunc();
 		for (int i=0; i<mModel.numEVectors; i++){
 			double value = params.get(i+4);
 			double constrain = mModel.shapeModel.mEigenConstraints.get(i);
@@ -163,7 +164,7 @@ public class FaceAlignProc implements Plotable{
 				params.set(i+4, -constrain);
 			}
 		}
-		
+		FuncTracer.endFunc();
 		return params;
 	}
 	
@@ -173,9 +174,7 @@ public class FaceAlignProc implements Plotable{
 		SimpleMatrix jacob = createJacobian(mCurrentParams);
 		SimpleMatrix transJacob = jacob.transpose();
 		
-		long curr = System.currentTimeMillis();
 		SimpleMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minus(mCurrentPositions));
-        Log.i("ttt", (System.currentTimeMillis()-curr) + "ms");
 		
 		mCurrentParams = regularizeParams(deltaParams.plus(mCurrentParams));
 		mCurrentPositions = getShape(mCurrentParams);
@@ -242,6 +241,8 @@ public class FaceAlignProc implements Plotable{
 	}
 	
 	private SimpleMatrix doChoosePeak(final float[] responseImg){
+		FuncTracer.startFunc();
+		
 		SimpleMatrix newPositions = new SimpleMatrix(mModel.numPts*2, 1);
 				
 		for (int i=0; i<mModel.numPts; i++){
@@ -263,6 +264,7 @@ public class FaceAlignProc implements Plotable{
 			newPositions.set(i*2, 0, mCropPositions.get(i*2) - (SEARCH_WIN_W-1)/2 + peakX);
 			newPositions.set(i*2+1, 0, mCropPositions.get(i*2+1) - (SEARCH_WIN_H-1)/2 + peakY);
 		}
+		FuncTracer.endFunc();
 		return newPositions;
 	}
 	
@@ -361,6 +363,8 @@ public class FaceAlignProc implements Plotable{
 	}
 	
 	private byte[] cropPatches(){
+		FuncTracer.startFunc();
+		
 		SimpleMatrix currShape = getCurrentShape();
 		
 		int filterW = mModel.patchModel.sampleWidth;
@@ -390,6 +394,8 @@ public class FaceAlignProc implements Plotable{
 				}
 			}
 		}
+		
+		FuncTracer.endFunc();
 		return ret;
 	}
 	

@@ -10,10 +10,20 @@ public class FuncTracer {
 		public Node(String className, String methodName, long time){
 			mClassName = className;
 			mMethodName = methodName;
+			mProcName = null;
 			mStartTime = time;
 		}
+		
+		public Node(String procName, long time){
+			mProcName = procName;
+			mClassName = null;
+			mMethodName = null;
+			mStartTime = time;
+		}
+		
 		public String mMethodName;    //name of func
 		public String mClassName;
+		public String mProcName;
 		public long mStartTime; //in ms
 	}
 	
@@ -57,6 +67,35 @@ public class FuncTracer {
 			Log.i(TAG, mMargin + item.mClassName + ":" + item.mMethodName + "() finish...<" + (System.currentTimeMillis()-item.mStartTime) + "ms>");
 
 		}		
+	}
+	
+	public static void startProcess(String token) {
+		if (BuildConfig.DEBUG){
+			mFuncStack.push(new Node(token, System.currentTimeMillis()));
+
+			if (!PRECISE_MODE){
+				Log.i(TAG, mMargin + "<" + token + ">" + " start...");
+			}
+			mMargin += INDENT;
+		}
+	}
+	
+	public static void endProc(String token) {
+		if (BuildConfig.DEBUG){	
+		    Node item = mFuncStack.pop();
+		    
+		    if (STRICT_MODE) {
+			    if (token.compareTo(item.mProcName) != 0){
+			    	//Not equal
+			    	Log.e(TAG, "Exception: endProc and startPRoc do not occur in pair!");
+			    }
+		    }
+			
+			mMargin = mMargin.substring(0, mMargin.length() - INDENT.length());
+
+			Log.i(TAG, mMargin + "<" + token + ">" + " finish...<" + (System.currentTimeMillis()-item.mStartTime) + "ms>");
+
+		}				
 	}
 	
 	public static void procException(Exception e) {
