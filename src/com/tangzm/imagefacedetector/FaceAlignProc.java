@@ -34,12 +34,15 @@ public class FaceAlignProc implements Plotable{
 	}
 	
 	private float[] makeInitialGuess(Bitmap bmp){
+		FuncTracer.startFunc();
+		
 		float[] ret = new float[4];
 		Face[] faces = new Face[1];
 		int num = 0;
-		int width = bmp.getWidth();
-		int height = bmp.getHeight();
-		Bitmap processBmp = bmp.copy(Bitmap.Config.RGB_565, false);
+		int width = bmp.getWidth()/INITIAL_FIT_SCALE_FACTOR;
+		int height = bmp.getHeight()/INITIAL_FIT_SCALE_FACTOR;
+		Bitmap scaledBmp = bmp.createScaledBitmap(bmp, width, height, false);
+		Bitmap processBmp = scaledBmp.copy(Bitmap.Config.RGB_565, false);
 		FaceDetector detector = new FaceDetector(width, height, 1);
 		num = detector.findFaces(processBmp, faces);
 		
@@ -48,14 +51,18 @@ public class FaceAlignProc implements Plotable{
 		PointF mid = new PointF();
 		face.getMidPoint(mid);
 		
-		ret[0] = mid.x - face.eyesDistance()/2;
-		ret[1] = mid.y;
-		ret[2] = mid.x + face.eyesDistance()/2;
-		ret[3] = mid.y;
+		ret[0] = (mid.x - face.eyesDistance()/2) * INITIAL_FIT_SCALE_FACTOR;
+		ret[1] = mid.y * INITIAL_FIT_SCALE_FACTOR;
+		ret[2] = (mid.x + face.eyesDistance()/2) * INITIAL_FIT_SCALE_FACTOR;
+		ret[3] = mid.y * INITIAL_FIT_SCALE_FACTOR;
+		
+		FuncTracer.endFunc();
 		return ret;
 	}
 	
 	public void searchInImage(Context ctx, Bitmap image) throws Exception{
+		FuncTracer.startFunc();
+		
 		float[] eyePositions = makeInitialGuess(image);
 		
 		if (null == eyePositions){
@@ -63,6 +70,8 @@ public class FaceAlignProc implements Plotable{
 		}
 		
 		searchInImage(ctx, image, eyePositions[0], eyePositions[1], eyePositions[2], eyePositions[3]);
+		
+		FuncTracer.endFunc();
 	}
 	
 	public void searchInImage(Context ctx, Bitmap image, float leftX, float leftY, float rightX, float rightY) throws Exception{
@@ -122,21 +131,27 @@ public class FaceAlignProc implements Plotable{
 	}
 	
 	private SimpleMatrix getShape(final SimpleMatrix params){
+		FuncTracer.startFunc();
+		
 		SimpleMatrix translate = getTranslateM(params);
 		SimpleMatrix sr = getScaleRotateM(params);
 		SimpleMatrix deviation = params.extractMatrix(4, mModel.numEVectors+4, 0, 1);
 		
 		SimpleMatrix evec = mModel.shapeModel.mEigenVectors;
 		SimpleMatrix mean = mModel.shapeModel.mMeanShape;
+		SimpleMatrix result = sr.mult(mean.plus(evec.mult(deviation))).plus(translate);
 		
-		return sr.mult(mean.plus(evec.mult(deviation))).plus(translate);
+		FuncTracer.endFunc();
+		
+		return result;
+
 	}
 	
 	private SimpleMatrix getCurrentShape(){
 		return getShape(mCurrentParams);
 	}
 	
-	private SimpleMatrix regularizeParams(SimpleMatrix params){
+	private SimpleMatrix regularizeParams(SimpleMatrix params){		
 		for (int i=0; i<mModel.numEVectors; i++){
 			double value = params.get(i+4);
 			double constrain = mModel.shapeModel.mEigenConstraints.get(i);
@@ -148,20 +163,29 @@ public class FaceAlignProc implements Plotable{
 				params.set(i+4, -constrain);
 			}
 		}
+		
 		return params;
 	}
 	
 	private void updateCurrent(SimpleMatrix newPositions){
+		FuncTracer.startFunc();
+		
 		SimpleMatrix jacob = createJacobian(mCurrentParams);
 		SimpleMatrix transJacob = jacob.transpose();
 		
-		SimpleMatrix deltaParams = transJacob.mult(jacob).pseudoInverse().mult(transJacob).mult(newPositions.minus(mCurrentPositions));
-
+		long curr = System.currentTimeMillis();
+		SimpleMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minus(mCurrentPositions));
+        Log.i("ttt", (System.currentTimeMillis()-curr) + "ms");
+		
 		mCurrentParams = regularizeParams(deltaParams.plus(mCurrentParams));
 		mCurrentPositions = getShape(mCurrentParams);
+		
+		FuncTracer.endFunc();
 	}
 	
 	private SimpleMatrix doMeanShift(final float[] responseImg, final SimpleMatrix currPositions, final int variance){
+		FuncTracer.startFunc();
+		
 		SimpleMatrix newPositions = new SimpleMatrix(mModel.numPts*2, 1);
 		
 		float[] gaussKernel = new float[SEARCH_WIN_W*SEARCH_WIN_H];
@@ -203,13 +227,18 @@ public class FaceAlignProc implements Plotable{
 			newPositions.set(i*2+1, numeratorY/denominator);
 		}
 		
+		FuncTracer.endFunc();
 		return newPositions;
 	}
 	
 	private void searchMeanShift(float[] responseImg){
+		FuncTracer.startFunc();
+		
 		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 10));
 		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 5));
 		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 1));
+		
+		FuncTracer.endFunc();
 	}
 	
 	private SimpleMatrix doChoosePeak(final float[] responseImg){
@@ -234,15 +263,18 @@ public class FaceAlignProc implements Plotable{
 			newPositions.set(i*2, 0, mCropPositions.get(i*2) - (SEARCH_WIN_W-1)/2 + peakX);
 			newPositions.set(i*2+1, 0, mCropPositions.get(i*2+1) - (SEARCH_WIN_H-1)/2 + peakY);
 		}
-		
 		return newPositions;
 	}
 	
 	private void searchPeak(float[] responseImg){
+		FuncTracer.startFunc();
 		updateCurrent(doChoosePeak(responseImg));
+		FuncTracer.endFunc();
 	}
 	
 	public void optimize(Algorithm type) throws Exception{
+		FuncTracer.startFunc();
+		
 		//Get Filter response
 		mFilter.setPatches(cropPatches());
 		
@@ -259,6 +291,7 @@ public class FaceAlignProc implements Plotable{
 			throw new Exception("Unsupported algorithm");
 		}
 		
+		FuncTracer.endFunc();
 	}
 	
 	
@@ -361,6 +394,8 @@ public class FaceAlignProc implements Plotable{
 	}
 	
 	private SimpleMatrix createJacobian (final SimpleMatrix params){
+		FuncTracer.startFunc();
+		
 		SimpleMatrix jac = new SimpleMatrix(mModel.numPts*2, mCurrentParams.numRows());
 		double j0,j1;
 		
@@ -406,6 +441,7 @@ public class FaceAlignProc implements Plotable{
 			}
 		}
 		
+		FuncTracer.endFunc();
 		return jac;
 	}
 	
@@ -705,6 +741,8 @@ public class FaceAlignProc implements Plotable{
 	
 	private static final int SEARCH_WIN_W = 11;
 	private static final int SEARCH_WIN_H = 11;
+	private static final int INITIAL_FIT_SCALE_FACTOR = 10;
+	private static final String TAG = "FaceDetector";
 	
 	//Image Data
 	private int mImageW;

@@ -13,6 +13,7 @@ import android.graphics.PointF;
 import android.media.FaceDetector;
 import android.media.FaceDetector.Face;
 import android.os.Bundle;
+import android.os.Debug;
 import android.provider.MediaStore.Images.Media;
 import android.util.Log;
 import android.view.Menu;
@@ -102,13 +103,16 @@ public class MainActivity extends Activity implements OnClickListener{
 				}
 				
 				proc.searchInImage(appCntx, currPic);
-
+				
+				//Debug.startMethodTracing("optimize", 100*1024*1024);
 				for (int t=0; t<3; t++){
 					proc.optimize(Algorithm.ASM);
 				}
+				//Debug.stopMethodTracing();
 				imgFrame.addPlot(proc);
 			}
 			catch(Exception e){
+				FuncTracer.procException(e);
 				e.printStackTrace();
 			}
 			

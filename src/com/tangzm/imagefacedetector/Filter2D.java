@@ -8,6 +8,8 @@ import android.renderscript.Type;
 
 public class Filter2D {
 	public Filter2D(Context ctx, float[] weights, float[] biases, byte[] patches, int numPatch, int filterW, int filterH, int patchW, int patchH){
+		FuncTracer.startFunc();
+		
 		mRS = RenderScript.create(ctx);
 		
 		mScript = new ScriptC_filter2d(mRS, ctx.getResources(), R.raw.filter2d);
@@ -70,6 +72,8 @@ public class Filter2D {
 		mScript.bind_gPatchList(mPatchAlloc);
 		mScript.bind_gResponseList(mResponseAlloc);
 		mScript.bind_gRegularResponseList(mRegularResponseAlloc);
+		
+		FuncTracer.endFunc();
 	}
 	
 	public void setModel(float[] weights, float[] biases){
@@ -85,6 +89,8 @@ public class Filter2D {
 	}
 	
 	public void process(boolean regularize){
+		FuncTracer.startFunc();
+		
 		mScript.forEach_filter(mFilterIndexAlloc);
 		
 		if (regularize){
@@ -94,6 +100,8 @@ public class Filter2D {
 		else {
 			mResponseAlloc.copyTo(mResponse);
 		}
+		
+		FuncTracer.endFunc();
 	}
 	
 	public float[] gerResponseImages(){
