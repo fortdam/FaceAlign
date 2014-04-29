@@ -109,11 +109,21 @@ class ShapeModel {
 	public SimpleMatrix mEigenValues;
 	public SimpleMatrix mEigenConstraints;
 	
+	public QMatrix mMeanShape_q;
+	public QMatrix mEigenVectors_q;
+	public QMatrix mEigenValues_q;
+	public QMatrix mEigenConstraints_q;
+	
 	public ShapeModel(JSONObject shape){
 		double[] eigenValues;
 		double[] eigenConstraints;
 		double[][] eigenVectors;
 		double[] meanShape;
+
+		float[] eigenValues_f;
+		float[] eigenConstraints_f;
+		float[] eigenVectors_f;
+		float[] meanShape_f;
 		
 		try {
 			int numEvec = shape.getInt(EVEC_NUM_LABEL);
@@ -124,10 +134,18 @@ class ShapeModel {
 			eigenVectors = new double[numPts*2][numEvec];
 			meanShape = new double[numPts*2];
 			
+			eigenValues_f = new float[numEvec];
+			eigenConstraints_f = new float[numEvec];
+			eigenVectors_f = new float[numPts*2*numEvec];
+			meanShape_f = new float[numPts*2];
+			
 			JSONArray evArray = shape.getJSONArray(EVALUE_LABEL);
 			for (int i=0; i<numEvec; i++){
 				eigenValues[i] = evArray.getDouble(i);
 				eigenConstraints[i] = Math.sqrt(eigenValues[i])*3;
+				
+				eigenValues_f[i] = (float)evArray.getDouble(i);
+				eigenConstraints_f[i] = (float)Math.sqrt(eigenValues[i])*3;
 			}
 			
 			JSONArray evecArray = shape.getJSONArray(EVEC_LABEL);
@@ -135,6 +153,8 @@ class ShapeModel {
 				JSONArray evecItem = evecArray.getJSONArray(i);
 				for (int j=0; j<numEvec; j++){
 					eigenVectors[i][j] = evecItem.getDouble(j);
+					
+					eigenVectors_f[i*numEvec+j] = (float)evecItem.getDouble(j);
 				}
 			}
 			
@@ -143,6 +163,9 @@ class ShapeModel {
             	JSONArray point = mean.getJSONArray(i);
             	meanShape[i*2] = point.getDouble(0);
             	meanShape[i*2+1] = point.getDouble(1);
+            	
+            	meanShape_f[i*2] = (float)point.getDouble(0);
+            	meanShape_f[i*2+1] = (float)point.getDouble(1);           	
             }
             
             if (true){            	
@@ -150,6 +173,11 @@ class ShapeModel {
             	mEigenValues = new SimpleMatrix(numEvec, 1, true, eigenValues);
             	mEigenConstraints = new SimpleMatrix(numEvec, 1, true, eigenConstraints);
             	mEigenVectors = new SimpleMatrix(eigenVectors);
+            	
+            	mMeanShape_q = new QMatrix(meanShape_f, numPts*2, 1, true);
+            	mEigenValues_q = new QMatrix(eigenValues_f, numEvec, 1, true);
+            	mEigenConstraints_q = new QMatrix(eigenConstraints_f, numEvec, 1, true);
+            	mEigenVectors_q = new QMatrix(eigenVectors_f, numPts*2, numEvec, true);
             }
 		}
 		catch (Exception e){

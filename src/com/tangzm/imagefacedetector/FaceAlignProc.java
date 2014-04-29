@@ -2,6 +2,8 @@ package com.tangzm.imagefacedetector;
 
 import org.ejml.simple.SimpleMatrix;
 
+import com.tangzm.imagefacedetector.QMatrix.RepMode;
+
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -31,6 +33,8 @@ public class FaceAlignProc implements Plotable{
         		mModel.patchModel.sampleHeight, 
         		(mModel.patchModel.sampleWidth+SEARCH_WIN_W-1),
         		(mModel.patchModel.sampleHeight+SEARCH_WIN_H-1));
+        
+        QMatrix.init(ctx);
 	}
 	
 	private float[] makeInitialGuess(Bitmap bmp){
@@ -106,12 +110,20 @@ public class FaceAlignProc implements Plotable{
         rightY *= scale;
         
 		mCurrentParams = new SimpleMatrix(mModel.numEVectors+4, 1);
+		mCurrentParams_q = new QMatrix(mModel.numEVectors+4, 1);
 		
 		mCurrentParams.set(0, Math.cos(diffAngle)); //Alpha * cos(theta)
 		mCurrentParams.set(1, Math.sin(diffAngle)); //Alpha * sin(theta)
 		mCurrentParams.set(2, (rightX+leftX)/2-(meanRightX+meanLeftX)/2); //translate X
 		mCurrentParams.set(3, (rightY+leftY)/2-(meanRightY+meanLeftY)/2);  //translate Y
-        
+		
+		mCurrentParams_q.set(0, (float)Math.cos(diffAngle)); //Alpha * cos(theta)
+		mCurrentParams_q.set(1, (float)Math.sin(diffAngle)); //Alpha * sin(theta)
+		mCurrentParams_q.set(2, (float)((rightX+leftX)/2-(meanRightX+meanLeftX)/2)); //translate X
+		mCurrentParams_q.set(3, (float)((rightY+leftY)/2-(meanRightY+meanLeftY)/2));  //translate Y
+		
+		mCurrentParams_q.verify(mCurrentParams);
+		
         mImageW = imgProcess.getWidth();
         mImageH = imgProcess.getHeight();
         
@@ -128,6 +140,135 @@ public class FaceAlignProc implements Plotable{
         
         mCurrentPositions = getCurrentShape();
         mOriginalPositions = new SimpleMatrix(mCurrentPositions);
+        
+        mCurrentPositions_q = getCurrentShape_q();
+        mOriginalPositions_q = new QMatrix(mCurrentPositions_q, true);       
+	}
+	
+	private SimpleMatrix getScaleRotateM(final SimpleMatrix params){
+		return getScaleRotateM(params, 1, 0);
+	}
+	
+	private QMatrix getScaleRotateM_q(final QMatrix params){
+		return getScaleRotateM_q(params, 1, 0);
+	}
+	
+	private SimpleMatrix getScaleRotateM(final double scale, final double theta){
+		return getScaleRotateM(null, scale, theta);
+	}
+	
+	private QMatrix getScaleRotateM_q(final double scale, final double theta){
+		return getScaleRotateM_q(null, scale, theta);
+	}
+	
+	private SimpleMatrix getScaleRotateM(final SimpleMatrix params, final double scale, final double theta){		
+        double scaleFactor = scale;
+        double rotateAngle = theta;
+        
+        if (params!=null){
+    		double a = params.get(0, 0);	
+            double b = params.get(1, 0);
+            
+            scaleFactor *= Math.sqrt(a*a + b*b);
+            
+            if (Math.abs(a) > 0.001){
+            	rotateAngle += Math.atan(b/a);
+            }
+        }
+		
+        double v1 = scaleFactor * Math.cos(rotateAngle);
+        double v2 = scaleFactor * Math.sin(rotateAngle);
+        
+		SimpleMatrix result = new SimpleMatrix(mModel.numPts*2, mModel.numPts*2);
+		result.set(0);
+		
+		for (int i=0; i<mModel.numPts; i++){
+			result.set(i*2, i*2, v1);
+			result.set(i*2+1, i*2+1, v1);	
+			result.set(i*2, i*2+1, -v2);
+			result.set(i*2+1, i*2, v2);
+		}
+		
+		return result;
+	}
+
+	private QMatrix getScaleRotateM_q(final QMatrix params, final double scale, final double theta){		
+        double scaleFactor = scale;
+        double rotateAngle = theta;
+        
+        if (params!=null){
+    		double a = params.get(0, 0);	
+            double b = params.get(1, 0);
+            
+            scaleFactor *= Math.sqrt(a*a + b*b);
+            
+            if (Math.abs(a) > 0.001){
+            	rotateAngle += Math.atan(b/a);
+            }
+        }
+		
+        float v1 = (float)(scaleFactor * Math.cos(rotateAngle));
+        float v2 = (float)(scaleFactor * Math.sin(rotateAngle));
+        
+		QMatrix result = new QMatrix(2, 2);
+
+		result.set(0, 0, v1);
+		result.set(1, 1, v1);	
+		result.set(0, 1, -v2);
+		result.set(1, 0, v2);
+		
+		return result;
+	}
+
+	private SimpleMatrix getTranslateM(final SimpleMatrix params){
+		return getTranslateM(params, 0, 0);
+	}
+	
+	private QMatrix getTranslateM_q(final QMatrix params){
+		return getTranslateM_q(params, 0, 0);
+	}
+	
+	private SimpleMatrix getTranslateM(final double offsetX, final double offsetY){
+		return getTranslateM(null, offsetX, offsetY);
+	}
+	
+	private QMatrix getTranslateM_q(final double offsetX, final double offsetY){
+		return getTranslateM_q(null, offsetX, offsetY);
+	}
+	
+	private SimpleMatrix getTranslateM(final SimpleMatrix params, final double offsetX, final double offsetY){
+		double x =  offsetX;
+		double y =  offsetY;
+		
+		if (params != null){
+			x += params.get(2,0);
+			y += params.get(3, 0);
+		}
+		
+		SimpleMatrix result = new SimpleMatrix(mModel.numPts*2, 1);
+		for (int i=0; i<mModel.numPts; i++){
+			result.set(i*2, 0, x);
+			result.set(i*2+1, 0, y);
+		}
+		
+		return result;
+	}
+	
+	private QMatrix getTranslateM_q(final QMatrix params, final double offsetX, final double offsetY){
+		double x =  offsetX;
+		double y =  offsetY;
+		
+		if (params != null){
+			x += params.get(2,0);
+			y += params.get(3, 0);
+		}
+		
+		QMatrix result = new QMatrix(2, 1);
+		
+		result.set(0, (float)x);
+		result.set(1, (float)y);
+		
+		return result;
 	}
 	
 	private SimpleMatrix getShape(final SimpleMatrix params){
@@ -147,8 +288,30 @@ public class FaceAlignProc implements Plotable{
 
 	}
 	
+	private QMatrix getShape_q(final QMatrix params){
+		FuncTracer.startFunc();
+		
+		QMatrix translate = getTranslateM_q(params);
+		QMatrix sr = getScaleRotateM_q(params);
+		QMatrix deviation = params.rows(4, mModel.numEVectors+4);
+		
+		QMatrix evec = mModel.shapeModel.mEigenVectors_q;
+		QMatrix mean = mModel.shapeModel.mMeanShape_q;
+		
+		QMatrix result = evec.mult(deviation).plusSelf(mean).multRepSelf(sr).addRepSelf(translate, RepMode.VERTICAL_ONLY);
+				
+		FuncTracer.endFunc();
+		
+		return result;
+
+	}
+	
 	private SimpleMatrix getCurrentShape(){
 		return getShape(mCurrentParams);
+	}
+	
+	private QMatrix getCurrentShape_q(){
+		return getShape_q(mCurrentParams_q);
 	}
 	
 	private SimpleMatrix regularizeParams(SimpleMatrix params){	
@@ -168,16 +331,164 @@ public class FaceAlignProc implements Plotable{
 		return params;
 	}
 	
+	private QMatrix regularizeParams_q(QMatrix params){	
+		FuncTracer.startFunc();
+		for (int i=0; i<mModel.numEVectors; i++){
+			float value = params.get(i+4, 0);
+			float constrain = mModel.shapeModel.mEigenConstraints_q.get(i, 0);
+			
+			if (value > constrain){
+				params.set(i+4, 0, constrain);
+			}
+			else if (value < -constrain){
+				params.set(i+4, 0, -constrain);
+			}
+		}
+		FuncTracer.endFunc();
+		return params;
+	}
+	
+	private SimpleMatrix createJacobian (final SimpleMatrix params){
+		FuncTracer.startFunc();
+		
+		SimpleMatrix jac = new SimpleMatrix(mModel.numPts*2, mCurrentParams.numRows());
+		double j0,j1;
+		
+		SimpleMatrix meanShape = mModel.shapeModel.mMeanShape;
+		SimpleMatrix eigenVectors = mModel.shapeModel.mEigenVectors;
+		
+		for (int i=0; i<mModel.numPts; i++){
+			//1
+			j0 = meanShape.get(i*2);
+			j1 = meanShape.get(i*2+1);
+			
+			for (int j=0; j<eigenVectors.numCols(); j++){
+				j0 += params.get(j+4)*eigenVectors.get(i*2, j);
+				j1 += params.get(j+4)*eigenVectors.get(i*2+1, j);
+			}
+			jac.set(i*2, 0, j0);
+			jac.set(i*2+1, 0, j1);
+			
+			//2
+			j0 = meanShape.get(i*2+1);
+			j1 = meanShape.get(i*2);	
+			
+			for (int j=0; j<eigenVectors.numCols(); j++){
+				j0 += params.get(j+4)*eigenVectors.get(i*2+1, j);
+				j1 += params.get(j+4)*eigenVectors.get(i*2, j);
+			}
+			jac.set(i*2, 1, -j0);
+			jac.set(i*2+1, 1, j1);
+			
+			//3
+			jac.set(i*2, 2, 1);
+			jac.set(i*2+1, 2, 0);
+			
+			//4
+			jac.set(i*2, 3, 0);
+			jac.set(i*2+1, 3, 1);
+			
+			for (int j=0; j<eigenVectors.numCols(); j++){
+				j0 = params.get(0)*eigenVectors.get(i*2, j) - params.get(1)*eigenVectors.get(i*2+1, j);
+				j1 = params.get(0)*eigenVectors.get(i*2+1, j) + params.get(1)*eigenVectors.get(i*2, j);
+				jac.set(i*2, 4+j, j0);
+				jac.set(i*2+1, 4+j, j1);
+			}
+		}
+		
+		FuncTracer.endFunc();
+		return jac;
+	}
+	
+	private QMatrix createJacobian_q (final QMatrix params){
+		FuncTracer.startFunc();
+		
+		QMatrix jac = new QMatrix(mModel.numPts*2, mCurrentParams.numRows());
+		float j0,j1;
+		
+		QMatrix meanShape = mModel.shapeModel.mMeanShape_q;
+		QMatrix eigenVectors = mModel.shapeModel.mEigenVectors_q;
+	
+		
+		for (int i=0; i<mModel.numPts; i++){
+			//1
+			j0 = meanShape.get(i*2);
+			j1 = meanShape.get(i*2+1);
+			
+			for (int j=0; j<eigenVectors.numCols(); j++){
+				j0 += params.get(j+4)*eigenVectors.get(i*2, j);
+				j1 += params.get(j+4)*eigenVectors.get(i*2+1, j);
+			}
+			jac.set(i*2, 0, j0);
+			jac.set(i*2+1, 0, j1);
+			
+			//2
+			j0 = meanShape.get(i*2+1);
+			j1 = meanShape.get(i*2);	
+			
+			for (int j=0; j<eigenVectors.numCols(); j++){
+				j0 += params.get(j+4)*eigenVectors.get(i*2+1, j);
+				j1 += params.get(j+4)*eigenVectors.get(i*2, j);
+			}
+			jac.set(i*2, 1, -j0);
+			jac.set(i*2+1, 1, j1);
+			
+			//3
+			jac.set(i*2, 2, 1);
+			jac.set(i*2+1, 2, 0);
+			
+			//4
+			jac.set(i*2, 3, 0);
+			jac.set(i*2+1, 3, 1);
+			
+			for (int j=0; j<eigenVectors.numCols(); j++){
+				j0 = params.get(0)*eigenVectors.get(i*2, j) - params.get(1)*eigenVectors.get(i*2+1, j);
+				j1 = params.get(0)*eigenVectors.get(i*2+1, j) + params.get(1)*eigenVectors.get(i*2, j);
+				jac.set(i*2, 4+j, j0);
+				jac.set(i*2+1, 4+j, j1);
+			}
+		}
+		
+		FuncTracer.endFunc();
+		return jac;
+	}
+	
 	private void updateCurrent(SimpleMatrix newPositions){
 		FuncTracer.startFunc();
 		
 		SimpleMatrix jacob = createJacobian(mCurrentParams);
 		SimpleMatrix transJacob = jacob.transpose();
 		
+		mTempMat = transJacob.mult(jacob);
 		SimpleMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minus(mCurrentPositions));
+
 		
 		mCurrentParams = regularizeParams(deltaParams.plus(mCurrentParams));
 		mCurrentPositions = getShape(mCurrentParams);
+		
+		FuncTracer.endFunc();
+	}
+	
+	private void updateCurrent_q(QMatrix newPositions){
+		FuncTracer.startFunc();
+
+		QMatrix jacob = createJacobian_q(mCurrentParams_q);
+		QMatrix transJacob = jacob.transpose();
+		
+		QMatrix test = new QMatrix(new float[] {
+				1f, 100, 0, 100, 
+				0, 1f, 100, 0, 
+				0, 0, 1f, 1000000,
+				100, 0, 0, 1f}, 4, 4, true);
+		test.invert().mult(test).printOut();
+		//test.luDecomp();
+		//test.printLU();
+		QMatrix a = transJacob.mult(jacob);
+		a.verify(mTempMat);
+		QMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minusSelf(mCurrentPositions_q));
+
+		mCurrentParams_q = regularizeParams_q(deltaParams.plus(mCurrentParams_q));
+		mCurrentPositions_q = getShape_q(mCurrentParams_q);
 		
 		FuncTracer.endFunc();
 	}
@@ -268,9 +579,46 @@ public class FaceAlignProc implements Plotable{
 		return newPositions;
 	}
 	
+	private QMatrix doChoosePeak_q(final float[] responseImg){
+		FuncTracer.startFunc();
+		
+		QMatrix newPositions = new QMatrix(mModel.numPts*2, 1);
+				
+		for (int i=0; i<mModel.numPts; i++){
+			double peak = 0;
+			int peakX = 0;
+			int peakY = 0;
+			int respImgOffset = i*SEARCH_WIN_W*SEARCH_WIN_H;
+			
+			for (int j=0; j<SEARCH_WIN_W; j++){
+				for (int k=0; k<SEARCH_WIN_H; k++){
+					if (responseImg[respImgOffset+k*SEARCH_WIN_W+j]>peak){
+						peak = responseImg[respImgOffset+k*SEARCH_WIN_W+j];
+						peakX = j;
+						peakY = k;
+					}
+				}
+			}
+
+			newPositions.set(i*2, 0, (float)(mCropPositions.get(i*2) - (SEARCH_WIN_W-1)/2 + peakX));
+			newPositions.set(i*2+1, 0, (float)(mCropPositions.get(i*2+1) - (SEARCH_WIN_H-1)/2 + peakY));
+		}
+		FuncTracer.endFunc();
+		return newPositions;
+	}
+	
 	private void searchPeak(float[] responseImg){
 		FuncTracer.startFunc();
+		
+		
+		FuncTracer.startProc("SimpleMatrix_Search");
 		updateCurrent(doChoosePeak(responseImg));
+		FuncTracer.endProc("SimpleMatrix_Search");
+		
+		FuncTracer.startProc("QMatrix_Search");
+		updateCurrent_q( doChoosePeak_q(responseImg));
+		FuncTracer.endProc("QMatrix_Search");
+		
 		FuncTracer.endFunc();
 	}
 	
@@ -297,70 +645,7 @@ public class FaceAlignProc implements Plotable{
 	}
 	
 	
-	private SimpleMatrix getScaleRotateM(final SimpleMatrix params){
-		return getScaleRotateM(params, 1, 0);
-	}
-	
-	private SimpleMatrix getScaleRotateM(final double scale, final double theta){
-		return getScaleRotateM(null, scale, theta);
-	}
-	
-	private SimpleMatrix getScaleRotateM(final SimpleMatrix params, final double scale, final double theta){		
-        double scaleFactor = scale;
-        double rotateAngle = theta;
-        
-        if (params!=null){
-    		double a = params.get(0, 0);	
-            double b = params.get(1, 0);
-            
-            scaleFactor *= Math.sqrt(a*a + b*b);
-            
-            if (Math.abs(a) > 0.001){
-            	rotateAngle += Math.atan(b/a);
-            }
-        }
-		
-        double v1 = scaleFactor * Math.cos(rotateAngle);
-        double v2 = scaleFactor * Math.sin(rotateAngle);
-        
-		SimpleMatrix result = new SimpleMatrix(mModel.numPts*2, mModel.numPts*2);
-		result.set(0);
-		
-		for (int i=0; i<mModel.numPts; i++){
-			result.set(i*2, i*2, v1);
-			result.set(i*2+1, i*2+1, v1);	
-			result.set(i*2, i*2+1, -v2);
-			result.set(i*2+1, i*2, v2);
-		}
-		
-		return result;
-	}
 
-	private SimpleMatrix getTranslateM(final SimpleMatrix params){
-		return getTranslateM(params, 0, 0);
-	}
-	
-	private SimpleMatrix getTranslateM(final double offsetX, final double offsetY){
-		return getTranslateM(null, offsetX, offsetY);
-	}
-	
-	private SimpleMatrix getTranslateM(final SimpleMatrix params, final double offsetX, final double offsetY){
-		double x =  offsetX;
-		double y =  offsetY;
-		
-		if (params != null){
-			x += params.get(2,0);
-			y += params.get(3, 0);
-		}
-		
-		SimpleMatrix result = new SimpleMatrix(mModel.numPts*2, 1);
-		for (int i=0; i<mModel.numPts; i++){
-			result.set(i*2, 0, x);
-			result.set(i*2+1, 0, y);
-		}
-		
-		return result;
-	}
 	
 	private byte[] cropPatches(){
 		FuncTracer.startFunc();
@@ -399,57 +684,7 @@ public class FaceAlignProc implements Plotable{
 		return ret;
 	}
 	
-	private SimpleMatrix createJacobian (final SimpleMatrix params){
-		FuncTracer.startFunc();
-		
-		SimpleMatrix jac = new SimpleMatrix(mModel.numPts*2, mCurrentParams.numRows());
-		double j0,j1;
-		
-		SimpleMatrix meanShape = mModel.shapeModel.mMeanShape;
-		SimpleMatrix eigenVectors = mModel.shapeModel.mEigenVectors;
-		
-		for (int i=0; i<mModel.numPts; i++){
-			//1
-			j0 = meanShape.get(i*2);
-			j1 = meanShape.get(i*2+1);
-			
-			for (int j=0; j<eigenVectors.numCols(); j++){
-				j0 += params.get(j+4)*eigenVectors.get(i*2, j);
-				j1 += params.get(j+4)*eigenVectors.get(i*2+1, j);
-			}
-			jac.set(i*2, 0, j0);
-			jac.set(i*2+1, 0, j1);
-			
-			//2
-			j0 = meanShape.get(i*2+1);
-			j1 = meanShape.get(i*2);	
-			
-			for (int j=0; j<eigenVectors.numCols(); j++){
-				j0 += params.get(j+4)*eigenVectors.get(i*2+1, j);
-				j1 += params.get(j+4)*eigenVectors.get(i*2, j);
-			}
-			jac.set(i*2, 1, -j0);
-			jac.set(i*2+1, 1, j1);
-			
-			//3
-			jac.set(i*2, 2, 1);
-			jac.set(i*2+1, 2, 0);
-			
-			//4
-			jac.set(i*2, 3, 0);
-			jac.set(i*2+1, 3, 1);
-			
-			for (int j=0; j<eigenVectors.numCols(); j++){
-				j0 = params.get(0)*eigenVectors.get(i*2, j) - params.get(1)*eigenVectors.get(i*2+1, j);
-				j1 = params.get(0)*eigenVectors.get(i*2+1, j) + params.get(1)*eigenVectors.get(i*2, j);
-				jac.set(i*2, 4+j, j0);
-				jac.set(i*2+1, 4+j, j1);
-			}
-		}
-		
-		FuncTracer.endFunc();
-		return jac;
-	}
+
 	
 	//For test only
 	private SimpleMatrix makeTestDate(SimpleMatrix params) {
@@ -763,7 +998,13 @@ public class FaceAlignProc implements Plotable{
 	private SimpleMatrix mCropPositions;   //The positions for patch cropped
 	private SimpleMatrix mCurrentPositions;  //The positions for current calculated
 	private SimpleMatrix mCurrentParams;
-		
+	private SimpleMatrix mTempMat;
+	
+	private QMatrix mOriginalPositions_q; //The positions for initial guess
+	private QMatrix mCropPositions_q;   //The positions for patch cropped
+	private QMatrix mCurrentPositions_q;  //The positions for current calculated
+	private QMatrix mCurrentParams_q;	
+	
 	private Filter2D mFilter;
 	
 	//For test / plotting

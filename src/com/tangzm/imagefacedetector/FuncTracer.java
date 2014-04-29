@@ -29,7 +29,7 @@ public class FuncTracer {
 	
 	
 	public static void startFunc() {
-		if (BuildConfig.DEBUG){
+		if (BuildConfig.DEBUG && !mException){
 		    StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
 		    StackTraceElement e = stacktrace[3];//coz 0th will be getStackTrace so 1st
 		    String funcName = e.getMethodName();
@@ -46,7 +46,7 @@ public class FuncTracer {
 	}
 	
 	public static void endFunc(){
-		if (BuildConfig.DEBUG){	
+		if (BuildConfig.DEBUG && !mException){	
 		    Node item = mFuncStack.pop();
 		    
 		    if (STRICT_MODE) {
@@ -69,8 +69,8 @@ public class FuncTracer {
 		}		
 	}
 	
-	public static void startProcess(String token) {
-		if (BuildConfig.DEBUG){
+	public static void startProc(String token) {
+		if (BuildConfig.DEBUG && !mException){
 			mFuncStack.push(new Node(token, System.currentTimeMillis()));
 
 			if (!PRECISE_MODE){
@@ -81,13 +81,14 @@ public class FuncTracer {
 	}
 	
 	public static void endProc(String token) {
-		if (BuildConfig.DEBUG){	
+		if (BuildConfig.DEBUG && !mException){	
 		    Node item = mFuncStack.pop();
 		    
 		    if (STRICT_MODE) {
 			    if (token.compareTo(item.mProcName) != 0){
 			    	//Not equal
 			    	Log.e(TAG, "Exception: endProc and startPRoc do not occur in pair!");
+			    	return;
 			    }
 		    }
 			
@@ -99,25 +100,10 @@ public class FuncTracer {
 	}
 	
 	public static void procException(Exception e) {
-		StackTraceElement[] Etrace = e.getStackTrace();
-		StackTraceElement[] Ctrace = Thread.currentThread().getStackTrace();
-		
-		int sameLevel = 1;
-		
-		while (0 == Ctrace[Ctrace.length-sameLevel].getMethodName().compareTo(Etrace[Etrace.length-sameLevel].getMethodName())){
-			//trim the same func history in the stack
-			sameLevel += 1;
-		}
-		
-		for (int i=0; i<Etrace.length-sameLevel; i++) {
-			Node topItem = mFuncStack.peek();
-			
-			if (Etrace[i].getMethodName().compareTo(topItem.mMethodName)==0) {
-				mFuncStack.pop();
-				mMargin = mMargin.substring(0, mMargin.length() - INDENT.length());
-			}
-		}
+		mException = true;
 	}
+	
+	private static boolean mException = false;
 	
 	private static final String TAG = "FuncTracer";
 	private static final String INDENT = "  ";

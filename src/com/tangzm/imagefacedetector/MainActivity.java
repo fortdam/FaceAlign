@@ -78,7 +78,7 @@ public class MainActivity extends Activity implements OnClickListener{
 			imgFrame.setImageBitmap(currPic);			
 
 			try {
-				FuncTracer.startProcess("Fit");
+				FuncTracer.startProc("Fit");
 				if (null == proc) {
 					proc = new FaceAlignProc();
 					proc.init(appCntx, model);
@@ -87,7 +87,7 @@ public class MainActivity extends Activity implements OnClickListener{
 				proc.searchInImage(appCntx, currPic);
 				
 				//Debug.startMethodTracing("optimize", 100*1024*1024);
-				for (int t=0; t<3; t++){
+				for (int t=0; t<1; t++){
 					proc.optimize(Algorithm.ASM);
 				}
 				//Debug.stopMethodTracing();
