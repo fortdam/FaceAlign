@@ -121,9 +121,7 @@ public class FaceAlignProc implements Plotable{
 		mCurrentParams_q.set(1, (float)Math.sin(diffAngle)); //Alpha * sin(theta)
 		mCurrentParams_q.set(2, (float)((rightX+leftX)/2-(meanRightX+meanLeftX)/2)); //translate X
 		mCurrentParams_q.set(3, (float)((rightY+leftY)/2-(meanRightY+meanLeftY)/2));  //translate Y
-		
-		mCurrentParams_q.verify(mCurrentParams);
-		
+				
         mImageW = imgProcess.getWidth();
         mImageH = imgProcess.getHeight();
         
@@ -280,6 +278,7 @@ public class FaceAlignProc implements Plotable{
 		
 		SimpleMatrix evec = mModel.shapeModel.mEigenVectors;
 		SimpleMatrix mean = mModel.shapeModel.mMeanShape;
+		
 		SimpleMatrix result = sr.mult(mean.plus(evec.mult(deviation))).plus(translate);
 		
 		FuncTracer.endFunc();
@@ -298,8 +297,8 @@ public class FaceAlignProc implements Plotable{
 		QMatrix evec = mModel.shapeModel.mEigenVectors_q;
 		QMatrix mean = mModel.shapeModel.mMeanShape_q;
 		
-		QMatrix result = evec.mult(deviation).plusSelf(mean).multRepSelf(sr).addRepSelf(translate, RepMode.VERTICAL_ONLY);
-				
+		QMatrix result = evec.mult(deviation).plusSelf(mean).multRepSelf(sr).plusRepSelf(translate, RepMode.VERTICAL_ONLY);
+		
 		FuncTracer.endFunc();
 		
 		return result;
@@ -458,10 +457,8 @@ public class FaceAlignProc implements Plotable{
 		
 		SimpleMatrix jacob = createJacobian(mCurrentParams);
 		SimpleMatrix transJacob = jacob.transpose();
-		
-		mTempMat = transJacob.mult(jacob);
+		mTempMat = new SimpleMatrix(mCurrentPositions);
 		SimpleMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minus(mCurrentPositions));
-
 		
 		mCurrentParams = regularizeParams(deltaParams.plus(mCurrentParams));
 		mCurrentPositions = getShape(mCurrentParams);
@@ -475,20 +472,12 @@ public class FaceAlignProc implements Plotable{
 		QMatrix jacob = createJacobian_q(mCurrentParams_q);
 		QMatrix transJacob = jacob.transpose();
 		
-		QMatrix test = new QMatrix(new float[] {
-				1f, 100, 0, 100, 
-				0, 1f, 100, 0, 
-				0, 0, 1f, 1000000,
-				100, 0, 0, 1f}, 4, 4, true);
-		test.invert().mult(test).printOut();
-		//test.luDecomp();
-		//test.printLU();
-		QMatrix a = transJacob.mult(jacob);
-		a.verify(mTempMat);
 		QMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minusSelf(mCurrentPositions_q));
-
+		
 		mCurrentParams_q = regularizeParams_q(deltaParams.plus(mCurrentParams_q));
 		mCurrentPositions_q = getShape_q(mCurrentParams_q);
+		
+		mCurrentPositions_q.verify(mCurrentPositions);
 		
 		FuncTracer.endFunc();
 	}
@@ -616,7 +605,7 @@ public class FaceAlignProc implements Plotable{
 		FuncTracer.endProc("SimpleMatrix_Search");
 		
 		FuncTracer.startProc("QMatrix_Search");
-		updateCurrent_q( doChoosePeak_q(responseImg));
+		updateCurrent_q(doChoosePeak_q(responseImg));
 		FuncTracer.endProc("QMatrix_Search");
 		
 		FuncTracer.endFunc();

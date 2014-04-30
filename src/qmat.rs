@@ -5,7 +5,6 @@
 float* opMat1;
 float* opMat2;
 float* resultMat;
-double* tempMat;
 
 int numRow;
 int numColumn;
@@ -23,24 +22,22 @@ void __attribute__((kernel)) muliply(uint8_t in, uint32_t x, uint32_t y) {
 }
 
 
-void __attribute__((kernel)) mulRep(uint8_t in, uint32_t x) {
+void __attribute__((kernel)) mulRep(uint8_t in, uint32_t x, uint32_t y) {
 	int i=0;
 	int j=0;
 	int k=0;
 	int l=0;
-	float val = 0;
+	float value = 0;
 	
-	int offset = x*dim*numColumn;
+	int offset = y*dim*numColumn;
 	
-	for (i=0; i<dim; i++) {
-		for (j=0; j<numColumn; j++) {
-			val = 0;
-			
+	for (i=0; i<numColumn; i++) {
+		for (j=0; j<dim; j++) {
+			value = 0;
 			for (k=0; k<dim; k++) {
-				val += opMat1[i*dim+k] * opMat2[offset+k*numColumn+j];
+				value += opMat1[j*dim+k] * opMat2[offset+k*numColumn+i];
 			}
-			
-			resultMat[offset+i*numColumn+j] = val;
+			resultMat[offset+j*numColumn+i] = value;
 		}
 	}
 }
@@ -51,7 +48,7 @@ void __attribute__((kernel)) mulRep(uint8_t in, uint32_t x) {
 void __attribute__((kernel)) resolve(uint8_t in, uint32_t x) {
 	int i=0; 
 	int j=0;
-	double sum=0;
+	float sum=0;
 	
 	//forward substitution
 	//using L matrix, be notified the diagonal of L is all ones
@@ -62,7 +59,7 @@ void __attribute__((kernel)) resolve(uint8_t in, uint32_t x) {
 			sum += opMat1[i*numColumn+j] * resultMat[j*dim+x];
 		}
 		
-		tempMat[i*dim+x] = resultMat[i*dim+x]-sum;
+		resultMat[i*dim+x] = resultMat[i*dim+x]-sum;
 	}
 	
 	//backward substitution
@@ -74,6 +71,6 @@ void __attribute__((kernel)) resolve(uint8_t in, uint32_t x) {
 			sum += opMat1[i*numColumn+j] * resultMat[j*dim+x];
 		}
 		
-		resultMat[i*dim+x] = (tempMat[i*dim+x] - sum)/opMat1[i*numColumn+i];
+		resultMat[i*dim+x] = (resultMat[i*dim+x] - sum)/opMat1[i*numColumn+i];
 	}
 }

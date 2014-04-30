@@ -28,7 +28,11 @@ public class QMatrix {
 		for (int i=0; i<dim; i++) {
 			m.mData[i*dim+i] = 1;
 		}
-		
+		return m;
+	}
+	
+	public static QMatrix zeros(int rows, int columns) {
+		QMatrix m = new QMatrix(rows,columns);
 		return m;
 	}
 	
@@ -188,7 +192,7 @@ public class QMatrix {
 		return this;
 	}
 	
-	private static void addRep_core(QMatrix target, QMatrix base, QMatrix factor, RepMode mode){
+	private static void plusRep_core(QMatrix target, QMatrix base, QMatrix factor, RepMode mode){
 		int rowDist = base.mRows/factor.mRows;
 		int colDist = base.mColumns/factor.mColumns;
 		
@@ -218,34 +222,35 @@ public class QMatrix {
 		}		
 	}
 	
-	public QMatrix addRep(QMatrix another, RepMode mode) {
+	public QMatrix plusRep(QMatrix another, RepMode mode) {
 		QMatrix result = new QMatrix(mRows, mColumns);
-		addRep_core(result, this, another, mode);
+		plusRep_core(result, this, another, mode);
 		return result;
 	}
 	
-	public QMatrix addRepSelf(QMatrix another, RepMode mode) {
-		addRep_core(this, this, another, mode);
+	public QMatrix plusRepSelf(QMatrix another, RepMode mode) {
+		plusRep_core(this, this, another, mode);
 		return this;
 	}
 	
-	private static void multRep_core(QMatrix target, QMatrix leftMat, QMatrix rightMat) {
+	private static void multRep_core(QMatrix target, QMatrix factorMat, QMatrix baseMat) {
 		
-		int repNum = rightMat.mRows/leftMat.mRows;
+		int repNum = baseMat.mRows/factorMat.mRows;
 		
-		Allocation op1Mat = Allocation.createSized(mRS, Element.F32(mRS), leftMat.mRows*leftMat.mColumns);
-		Allocation op2Mat = Allocation.createSized(mRS, Element.F32(mRS), rightMat.mRows*rightMat.mColumns);
-		Allocation resultMat = Allocation.createSized(mRS, Element.F32(mRS), rightMat.mRows*rightMat.mColumns);
-		Allocation index = Allocation.createTyped(mRS, mTB.setX(repNum).setY(1).create());
+		Allocation op1Mat = Allocation.createSized(mRS, Element.F32(mRS), factorMat.mRows*factorMat.mColumns);
+		Allocation op2Mat = Allocation.createSized(mRS, Element.F32(mRS), baseMat.mRows*baseMat.mColumns);
+		Allocation resultMat = Allocation.createSized(mRS, Element.F32(mRS), baseMat.mRows*baseMat.mColumns);
+		Allocation index = Allocation.createTyped(mRS, mTB.setX(1).setY(repNum).create());
 		
-		op1Mat.copyFrom(leftMat.mData);
-		op2Mat.copyFrom(rightMat.mData);
+		op1Mat.copyFrom(factorMat.mData);
+		op2Mat.copyFrom(baseMat.mData);
 		
 		mScript.bind_opMat1(op1Mat);
 		mScript.bind_opMat2(op2Mat);
-		mScript.set_numRow(rightMat.mRows);
-		mScript.set_numColumn(rightMat.mColumns);
-		mScript.set_dim(leftMat.mRows);
+		mScript.bind_resultMat(resultMat);
+		mScript.set_numRow(baseMat.mRows);
+		mScript.set_numColumn(baseMat.mColumns);
+		mScript.set_dim(factorMat.mRows);
 		
 		mScript.forEach_mulRep(index);
 		
@@ -295,13 +300,40 @@ public class QMatrix {
 		}
 		
 		mLUMat = new float[mRows*mColumns];
+		mPMat = new int[mRows];
+		float[] tempLine = new float[mColumns];
+		
+		for (int i=0; i<mRows; i++){
+			mPMat[i] = i;
+		}
 		
 		System.arraycopy(mData, 0, mLUMat, 0, mRows*mColumns);
 		
 		for (int i=0; i<mRows-1; i++) {
+			int maxii = i;
+			
+			for (int k=i+1; k<mRows; k++){
+				if (Math.abs(mLUMat[k*mColumns+i]) > Math.abs(mLUMat[maxii*mColumns+i])) {
+					maxii = k;
+				}
+			}
+			
+			if (maxii != i) {
+				//exchange 2 lines
+				mPMat[i] = maxii;
+				mPMat[maxii] = i;
+				
+				System.arraycopy(mLUMat, i*mColumns, tempLine, 0, mColumns);
+				System.arraycopy(mLUMat, maxii*mColumns, mLUMat, i*mColumns, mColumns);
+				System.arraycopy(tempLine, 0, mLUMat, maxii*mColumns, mColumns);
+			}
+			
+			
 			for (int j=i+1; j<mColumns; j++) {
+				mLUMat[j*mColumns + i] /= mLUMat[i*mColumns+i];
+				
 				for (int k=i+1; k<mRows; k++) {
-					mLUMat[j*mColumns+k] -= (mLUMat[i*mColumns+k] * mLUMat[j*mColumns+i])/mLUMat[i*mColumns+i];
+					mLUMat[j*mColumns+k] -= (mLUMat[i*mColumns+k] * mLUMat[j*mColumns+i]);
 				}
 			}
 		}
@@ -345,20 +377,21 @@ public class QMatrix {
 		
 		luDecomp();
 		
-		QMatrix result = QMatrix.eye(mRows);
+		QMatrix result = QMatrix.zeros(mRows, mRows);
+		
+		for (int i=0; i<mRows; i++) {
+			result.set(i*mColumns + mPMat[i], 1);
+		}
 		
 		Allocation op1Mat = Allocation.createSized(mRS, Element.F32(mRS), mRows*mColumns);
 		Allocation resultMat = Allocation.createSized(mRS, Element.F32(mRS), mRows*mColumns);
 		Allocation index = Allocation.createTyped(mRS, mTB.setX(mColumns).setY(1).create());
-		
-		Allocation tempMat = Allocation.createSized(mRS, Element.F64(mRS), mRows*mColumns);
-		
+				
 		op1Mat.copyFrom(mLUMat);
 		resultMat.copyFrom(result.mData);
 		
 		mScript.bind_opMat1(op1Mat);
 		mScript.bind_resultMat(resultMat);
-		mScript.bind_tempMat(tempMat);
 		mScript.set_numRow(mRows);
 		mScript.set_numColumn(mColumns);
 		mScript.set_dim(mColumns);
@@ -399,6 +432,7 @@ public class QMatrix {
 	}
 	
 	public void printOut(){
+		Log.i(TAG, "-----------------Matrix print out--------------------");
 		for (int i=0; i<mRows; i++){
 			String text = new String();
 			for (int j=0; j<mColumns; j++){
@@ -406,6 +440,7 @@ public class QMatrix {
 			}
 			Log.i(TAG, text);
 		}
+		Log.i(TAG, "-----------------Matrix print end--------------------");
 	}
 	
 	public void printLU(){
@@ -429,6 +464,7 @@ public class QMatrix {
 	private int mColumns;
 	
 	private float[] mLUMat;	
+	private int[] mPMat; //pmat is expressed as a vector
 	
 	private static RenderScript mRS;
     private static ScriptC_qmat mScript;
