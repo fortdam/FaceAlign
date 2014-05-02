@@ -1,5 +1,6 @@
 package com.tangzm.imagefacedetector;
 
+import com.tangzm.imagefacedetector.Filter2D.ResponseType;
 import com.tangzm.imagefacedetector.QMatrix.RepMode;
 
 import android.content.Context;
@@ -288,6 +289,44 @@ public class FaceAlignProc implements Plotable{
 		return jac;
 	}
 	
+	private QMatrix createInvCovariance(QMatrix meanPos, float[] responseImg){
+		QMatrix result = new QMatrix(mModel.numPts*2, mModel.numPts*2);
+		
+		QMatrix currPtsConv = new QMatrix(2,2);
+		float[] zeros = new float[]{0,0,0,0};
+		
+		for (int i=0; i<mModel.numPts; i++) {
+			float meanX = meanPos.get(i*2) - mCropPositions.get(i*2) + (SEARCH_WIN_W - 1);
+			float meanY = meanPos.get(i*2+1) - mCropPositions.get(i*2+1) + (SEARCH_WIN_H -1);
+			
+			currPtsConv.set(0, zeros);
+			int respImgOffset = i*SEARCH_WIN_W*SEARCH_WIN_H;
+			
+			for (int j=0; j<SEARCH_WIN_W; j++) {
+				for (int k=0; k<SEARCH_WIN_H; k++) {
+					float a = responseImg[respImgOffset+k*SEARCH_WIN_H+j];
+					float dx = j-meanX;
+					float dy = k-meanY;
+									
+					currPtsConv.set(0, currPtsConv.get(0)+a*dx*dx);
+					currPtsConv.set(1, currPtsConv.get(1)+a*dx*dy);
+					currPtsConv.set(3, currPtsConv.get(3)+a*dy*dy);
+				}
+			}
+			
+			currPtsConv.set(2, currPtsConv.get(1));
+			
+			QMatrix invConvPts = currPtsConv.invert();
+			
+			result.set(i*2, i*2, invConvPts.get(0));
+			result.set(i*2+1, i*2, invConvPts.get(1));
+			result.set(i*2, i*2+1, invConvPts.get(2));
+			result.set(i*2+1,  i*2+1, invConvPts.get(3));
+		}
+		
+		return result;
+	}
+	
 	private void updateCurrent(QMatrix newPositions){
 		FuncTracer.startFunc();
 
@@ -301,6 +340,22 @@ public class FaceAlignProc implements Plotable{
 	
 		//mCurrentPositions.verify(mCurrentPositions);
 		
+		FuncTracer.endFunc();
+	}
+	
+	private void updateCurrentCQF(QMatrix newPositions, float[] responseImg) {
+		FuncTracer.startFunc();
+		QMatrix jacob = createJacobian(mCurrentParams);
+		QMatrix transJacob = jacob.transpose();
+		QMatrix invCovariance = createInvCovariance(newPositions, responseImg);
+		
+		invCovariance.printOut();
+
+		
+		QMatrix deltaParams = transJacob.mult(invCovariance).mult(jacob).invert().mult(transJacob).mult(invCovariance).mult(newPositions.minusSelf(mCurrentPositions));
+		
+		mCurrentParams = regularizeParams(deltaParams.plusSelf(mCurrentParams));
+		mCurrentPositions = getShape(mCurrentParams);		
 		FuncTracer.endFunc();
 	}
 	
@@ -354,14 +409,46 @@ public class FaceAlignProc implements Plotable{
 	
 	private void searchMeanShift(float[] responseImg){
 		FuncTracer.startFunc();
-		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 20));
 		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 10));
 		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 5));
 		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 1));
+		FuncTracer.endFunc(); 
+	}
+	
+	private QMatrix doChooseMean(final float[] responseImg){
+		FuncTracer.startFunc();
+		
+		QMatrix newPositions = new QMatrix(mModel.numPts*2, 1);
+				
+		for (int i=0; i<mModel.numPts; i++){
+			double respValue = 0;
+			double meanX = 0;
+			double meanY = 0;
+			int respImgOffset = i*SEARCH_WIN_W*SEARCH_WIN_H;
+			
+			for (int j=0; j<SEARCH_WIN_W; j++){
+				for (int k=0; k<SEARCH_WIN_H; k++){
+					meanX += responseImg[respImgOffset+k*SEARCH_WIN_W+j]*j;
+				    meanY += responseImg[respImgOffset+k*SEARCH_WIN_W+j]*k;
+				}
+			}
+
+			newPositions.set(i*2, 0, (float)(mCropPositions.get(i*2) - (SEARCH_WIN_W-1)/2 + meanX));
+			newPositions.set(i*2+1, 0, (float)(mCropPositions.get(i*2+1) - (SEARCH_WIN_H-1)/2 + meanY));
+		}
+		FuncTracer.endFunc();
+		return newPositions;
+	}
+	
+	private void searchConvQuadFit(float[] responseImg) {
+		FuncTracer.startFunc();
+		
+		QMatrix meanPositions = doChooseMean(responseImg);
+		
+		updateCurrentCQF(meanPositions, responseImg);
 		
 		FuncTracer.endFunc();
 	}
-	
 	
 	private QMatrix doChoosePeak(final float[] responseImg){
 		FuncTracer.startFunc();
@@ -407,11 +494,15 @@ public class FaceAlignProc implements Plotable{
 		
 		//Optimize algorithm
 		if (Algorithm.ASM == type){
-			mFilter.process(false);
+			mFilter.process(ResponseType.RAW);
 			searchPeak(mFilter.gerResponseImages());
 		}
-		else if (Algorithm.KDE == type){
-			mFilter.process(true);
+		else if (Algorithm.CQF == type) {
+			mFilter.process(ResponseType.REG_NORMALIZED);
+			searchConvQuadFit(mFilter.gerResponseImages());
+		}
+		else if (Algorithm.KDE == type) {
+			mFilter.process(ResponseType.REGULARIZED);
 			searchMeanShift(mFilter.gerResponseImages());
 		}
 		else {
@@ -498,7 +589,7 @@ public class FaceAlignProc implements Plotable{
 			int offsetX = -(SEARCH_WIN_W-1)/2;
 			int offsetY = -(SEARCH_WIN_H-1)/2;
 			
-			for (int i=7; i<8; i++){
+			for (int i=27; i<28; i++){
 				double centX = mCropPositions.get(i*2);
 				double centY = mCropPositions.get(i*2+1);
 				

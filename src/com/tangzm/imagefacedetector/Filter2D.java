@@ -21,7 +21,7 @@ public class Filter2D {
 		mBiasAlloc = Allocation.createSized(mRS, Element.F32(mRS), numPatch, Allocation.USAGE_SCRIPT);
 		mPatchAlloc = Allocation.createSized(mRS, Element.U8(mRS), patchW*patchH*numPatch, Allocation.USAGE_SCRIPT);
 		mResponseAlloc = Allocation.createSized(mRS, Element.F32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
-		mRegularResponseAlloc = Allocation.createSized(mRS, Element.F32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
+		mProcResponseAlloc = Allocation.createSized(mRS, Element.F32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
 		
 		mFilterIndexAlloc = Allocation.createSized(mRS, Element.U32(mRS), numPatch*responseSize, Allocation.USAGE_SCRIPT);
 		mRegularizeIndexAlloc = Allocation.createSized(mRS, Element.U32(mRS), numPatch, Allocation.USAGE_SCRIPT);;
@@ -71,7 +71,7 @@ public class Filter2D {
 		mScript.bind_gBiasList(mBiasAlloc);
 		mScript.bind_gPatchList(mPatchAlloc);
 		mScript.bind_gResponseList(mResponseAlloc);
-		mScript.bind_gRegularResponseList(mRegularResponseAlloc);
+		mScript.bind_gProcResponseList(mProcResponseAlloc);
 		
 		FuncTracer.endFunc();
 	}
@@ -88,17 +88,31 @@ public class Filter2D {
 		mScript.bind_gPatchList(mPatchAlloc);
 	}
 	
-	public void process(boolean regularize){
+	public void process(ResponseType type){
 		FuncTracer.startFunc();
 		
 		mScript.forEach_filter(mFilterIndexAlloc);
 		
-		if (regularize){
-			mScript.forEach_regularize(mRegularizeIndexAlloc);
-			mRegularResponseAlloc.copyTo(mResponse);
+		if (ResponseType.RAW == type){
+			mResponseAlloc.copyTo(mResponse);
 		}
 		else {
-			mResponseAlloc.copyTo(mResponse);
+			if (ResponseType.REGULARIZED == type || ResponseType.REG_NORMALIZED == type) {
+				mScript.set_regularized((short)1);
+			}
+			else {
+				mScript.set_regularized((short)0);
+			}
+			
+			if (ResponseType.NORMALIZED == type || ResponseType.REG_NORMALIZED == type) {
+				mScript.set_normalized((short)1);
+			}
+			else {
+				mScript.set_normalized((short)0);
+			}
+			
+			mScript.forEach_regNorm(mRegularizeIndexAlloc);
+			mProcResponseAlloc.copyTo(mResponse);
 		}
 		
 		FuncTracer.endFunc();
@@ -106,6 +120,13 @@ public class Filter2D {
 	
 	public float[] gerResponseImages(){
 		return mResponse;
+	}
+	
+	public enum ResponseType {
+		RAW,
+		REGULARIZED,
+		NORMALIZED,
+		REG_NORMALIZED,
 	}
 	
 	
@@ -116,7 +137,7 @@ public class Filter2D {
 	private Allocation mBiasAlloc;
 	private Allocation mPatchAlloc;
 	private Allocation mResponseAlloc;
-	private Allocation mRegularResponseAlloc;
+	private Allocation mProcResponseAlloc;
 	private Allocation mFilterIndexAlloc;
 	private Allocation mRegularizeIndexAlloc;
 	

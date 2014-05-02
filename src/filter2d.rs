@@ -17,13 +17,17 @@ float *gBiasList;
 uchar *gPatchList;
 float *gResponseList;
 
-float *gRegularResponseList;
+float *gProcResponseList;
 
-void __attribute__((kernel)) regularize(uint32_t in) {
+uint8_t regularized;
+uint8_t normalized;
+
+void __attribute__((kernel)) regNorm(uint32_t in) {
 	float maxn = 0;
 	float minn = 1.0;
 	float scale = 1.0;
-	
+	float sum = 0;
+
 	//Find the upper-lower bounds
 	for (int i=0; i<respHeight; i++) {
 		for (int j=0; j<respWidth; j++) {
@@ -31,17 +35,39 @@ void __attribute__((kernel)) regularize(uint32_t in) {
 			maxn = fmax(maxn, curr);
 			minn = fmin(minn, curr);
 		}
-	} 
+	}  
 	
-	scale = maxn-minn;
+	if (1 == regularized) {
+		scale = maxn-minn;
+		
+		//Do regulariztion for each point
+		for (int i=0; i<respHeight; i++) {
+			for (int j=0; j<respWidth; j++) {
+				gProcResponseList[respSize*in+i*respWidth+j] = 
+					(gResponseList[respSize*in+i*respWidth+j] - minn)/scale;
+			}
+		} 	
+	}
 	
-	//Do regulariztion for each point
-	for (int i=0; i<respHeight; i++) {
-		for (int j=0; j<respWidth; j++) {
-			gRegularResponseList[respSize*in+i*respWidth+j] = 
-				(gResponseList[respSize*in+i*respWidth+j] - minn)/scale;
-		}
-	} 	
+	if (1 == normalized) {
+	    sum = 0;
+	    
+		for (int i=0; i<respHeight; i++) {
+			for (int j=0; j<respWidth; j++) {
+				sum += gProcResponseList[respSize*in+i*respWidth+j];
+			}
+		} 
+		
+		for (int i=0; i<respHeight; i++) {
+			for (int j=0; j<respWidth; j++) {
+				gProcResponseList[respSize*in+i*respWidth+j] = gProcResponseList[respSize*in+i*respWidth+j]/sum;
+			}
+		} 		
+	}
+	
+
+
+	
 } 
 
 void __attribute__((kernel)) filter(uint32_t in) {
