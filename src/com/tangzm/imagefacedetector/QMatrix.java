@@ -76,6 +76,10 @@ public class QMatrix {
 		return mColumns;
 	}
 	
+	public int length() {
+		return (mRows>mColumns?mRows:mColumns);
+	}
+	
 	public float get(int index) {
 		return mData[index];
 	}
@@ -383,22 +387,45 @@ public class QMatrix {
 			result.set(i*mColumns + mPMat[i], 1);
 		}
 		
-		Allocation op1Mat = Allocation.createSized(mRS, Element.F32(mRS), mRows*mColumns);
-		Allocation resultMat = Allocation.createSized(mRS, Element.F32(mRS), mRows*mColumns);
-		Allocation index = Allocation.createTyped(mRS, mTB.setX(mColumns).setY(1).create());
+		if (mRows > 5) { //use renderscript if the matrix is "big"
+			Allocation op1Mat = Allocation.createSized(mRS, Element.F32(mRS), mRows*mColumns);
+			Allocation resultMat = Allocation.createSized(mRS, Element.F32(mRS), mRows*mColumns);
+			Allocation index = Allocation.createTyped(mRS, mTB.setX(mColumns).setY(1).create());
+					
+			op1Mat.copyFrom(mLUMat);
+			resultMat.copyFrom(result.mData);
+			
+			mScript.bind_opMat1(op1Mat);
+			mScript.bind_resultMat(resultMat);
+			mScript.set_numRow(mRows);
+			mScript.set_numColumn(mColumns);
+			mScript.set_dim(mColumns);
+			
+			mScript.forEach_resolve(index);
+			
+			resultMat.copyTo(result.mData);
+		}
+		else {//Otherwise we compute by java.
+			for (int i=0; i<mColumns; i++) {
+				for (int j=0; j<mRows; j++) {
+					float sum = 0;
+					for (int k=0; k<j; k++) {
+						sum += mLUMat[j*mColumns+k] * result.mData[k*mColumns+i];
+					}
+					result.mData[j*mColumns+i] = result.mData[j*mColumns+i] - sum;
+				}
 				
-		op1Mat.copyFrom(mLUMat);
-		resultMat.copyFrom(result.mData);
-		
-		mScript.bind_opMat1(op1Mat);
-		mScript.bind_resultMat(resultMat);
-		mScript.set_numRow(mRows);
-		mScript.set_numColumn(mColumns);
-		mScript.set_dim(mColumns);
-		
-		mScript.forEach_resolve(index);
-		
-		resultMat.copyTo(result.mData);
+				for (int j=mRows-1; j>=0; j--) {
+					float sum = 0;
+					for (int k=mRows-1; k>j; k--) {
+						sum += mLUMat[j*mColumns+k] * result.mData[k*mColumns+i];
+					}
+					result.mData[j*mColumns+i] = (result.mData[j*mColumns+i] - sum)/mLUMat[j*mColumns+j];
+				}
+			}
+			
+
+		}
 		
 		return result;
 	}

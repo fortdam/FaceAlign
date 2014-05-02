@@ -5,7 +5,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 
-import org.ejml.simple.SimpleMatrix;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -103,16 +102,10 @@ class PathModel {
 
 
 class ShapeModel {	
-	
-	public SimpleMatrix mMeanShape;
-	public SimpleMatrix mEigenVectors;
-	public SimpleMatrix mEigenValues;
-	public SimpleMatrix mEigenConstraints;
-	
-	public QMatrix mMeanShape_q;
-	public QMatrix mEigenVectors_q;
-	public QMatrix mEigenValues_q;
-	public QMatrix mEigenConstraints_q;
+	public QMatrix mMeanShape;
+	public QMatrix mEigenVectors;
+	public QMatrix mEigenValues;
+	public QMatrix mEigenConstraints;
 	
 	public ShapeModel(JSONObject shape){
 		double[] eigenValues;
@@ -168,16 +161,11 @@ class ShapeModel {
             	meanShape_f[i*2+1] = (float)point.getDouble(1);           	
             }
             
-            if (true){            	
-            	mMeanShape = new SimpleMatrix(numPts*2, 1, true, meanShape);
-            	mEigenValues = new SimpleMatrix(numEvec, 1, true, eigenValues);
-            	mEigenConstraints = new SimpleMatrix(numEvec, 1, true, eigenConstraints);
-            	mEigenVectors = new SimpleMatrix(eigenVectors);
-            	
-            	mMeanShape_q = new QMatrix(meanShape_f, numPts*2, 1, true);
-            	mEigenValues_q = new QMatrix(eigenValues_f, numEvec, 1, true);
-            	mEigenConstraints_q = new QMatrix(eigenConstraints_f, numEvec, 1, true);
-            	mEigenVectors_q = new QMatrix(eigenVectors_f, numPts*2, numEvec, true);
+            if (true){            	           	
+            	mMeanShape = new QMatrix(meanShape_f, numPts*2, 1, true);
+            	mEigenValues = new QMatrix(eigenValues_f, numEvec, 1, true);
+            	mEigenConstraints = new QMatrix(eigenConstraints_f, numEvec, 1, true);
+            	mEigenVectors = new QMatrix(eigenVectors_f, numPts*2, numEvec, true);
             }
 		}
 		catch (Exception e){

@@ -87,7 +87,7 @@ public class MainActivity extends Activity implements OnClickListener{
 				proc.searchInImage(appCntx, currPic);
 				
 				//Debug.startMethodTracing("optimize", 100*1024*1024);
-				for (int t=0; t<1; t++){
+				for (int t=0; t<3; t++){
 					proc.optimize(Algorithm.ASM);
 				}
 				//Debug.stopMethodTracing();

@@ -1,7 +1,5 @@
 package com.tangzm.imagefacedetector;
 
-import org.ejml.simple.SimpleMatrix;
-
 import com.tangzm.imagefacedetector.QMatrix.RepMode;
 
 import android.content.Context;
@@ -43,8 +41,9 @@ public class FaceAlignProc implements Plotable{
 		float[] ret = new float[4];
 		Face[] faces = new Face[1];
 		int num = 0;
-		int width = bmp.getWidth()/INITIAL_FIT_SCALE_FACTOR;
-		int height = bmp.getHeight()/INITIAL_FIT_SCALE_FACTOR;
+		int scaleFactor = (bmp.getWidth()<bmp.getHeight()?bmp.getWidth():bmp.getHeight())/INITIAL_FIT_MIN_DIM;
+		int width = bmp.getWidth()/scaleFactor;
+		int height = bmp.getHeight()/scaleFactor;
 		Bitmap scaledBmp = bmp.createScaledBitmap(bmp, width, height, false);
 		Bitmap processBmp = scaledBmp.copy(Bitmap.Config.RGB_565, false);
 		FaceDetector detector = new FaceDetector(width, height, 1);
@@ -55,10 +54,10 @@ public class FaceAlignProc implements Plotable{
 		PointF mid = new PointF();
 		face.getMidPoint(mid);
 		
-		ret[0] = (mid.x - face.eyesDistance()/2) * INITIAL_FIT_SCALE_FACTOR;
-		ret[1] = mid.y * INITIAL_FIT_SCALE_FACTOR;
-		ret[2] = (mid.x + face.eyesDistance()/2) * INITIAL_FIT_SCALE_FACTOR;
-		ret[3] = mid.y * INITIAL_FIT_SCALE_FACTOR;
+		ret[0] = (mid.x - face.eyesDistance()/2) * scaleFactor;
+		ret[1] = mid.y * scaleFactor;
+		ret[2] = (mid.x + face.eyesDistance()/2) * scaleFactor;
+		ret[3] = mid.y * scaleFactor;
 		
 		FuncTracer.endFunc();
 		return ret;
@@ -109,18 +108,12 @@ public class FaceAlignProc implements Plotable{
         rightX *= scale;
         rightY *= scale;
         
-		mCurrentParams = new SimpleMatrix(mModel.numEVectors+4, 1);
-		mCurrentParams_q = new QMatrix(mModel.numEVectors+4, 1);
+		mCurrentParams = new QMatrix(mModel.numEVectors+4, 1);
 		
-		mCurrentParams.set(0, Math.cos(diffAngle)); //Alpha * cos(theta)
-		mCurrentParams.set(1, Math.sin(diffAngle)); //Alpha * sin(theta)
-		mCurrentParams.set(2, (rightX+leftX)/2-(meanRightX+meanLeftX)/2); //translate X
-		mCurrentParams.set(3, (rightY+leftY)/2-(meanRightY+meanLeftY)/2);  //translate Y
-		
-		mCurrentParams_q.set(0, (float)Math.cos(diffAngle)); //Alpha * cos(theta)
-		mCurrentParams_q.set(1, (float)Math.sin(diffAngle)); //Alpha * sin(theta)
-		mCurrentParams_q.set(2, (float)((rightX+leftX)/2-(meanRightX+meanLeftX)/2)); //translate X
-		mCurrentParams_q.set(3, (float)((rightY+leftY)/2-(meanRightY+meanLeftY)/2));  //translate Y
+		mCurrentParams.set(0, (float)Math.cos(diffAngle)); //Alpha * cos(theta)
+		mCurrentParams.set(1, (float)Math.sin(diffAngle)); //Alpha * sin(theta)
+		mCurrentParams.set(2, (float)((rightX+leftX)/2-(meanRightX+meanLeftX)/2)); //translate X
+		mCurrentParams.set(3, (float)((rightY+leftY)/2-(meanRightY+meanLeftY)/2));  //translate Y
 				
         mImageW = imgProcess.getWidth();
         mImageH = imgProcess.getHeight();
@@ -137,60 +130,18 @@ public class FaceAlignProc implements Plotable{
         outAlloc.copyTo(mImgGrayScaled);		
         
         mCurrentPositions = getCurrentShape();
-        mOriginalPositions = new SimpleMatrix(mCurrentPositions);
-        
-        mCurrentPositions_q = getCurrentShape_q();
-        mOriginalPositions_q = new QMatrix(mCurrentPositions_q, true);       
+        mOriginalPositions = new QMatrix(mCurrentPositions, true);       
 	}
 	
-	private SimpleMatrix getScaleRotateM(final SimpleMatrix params){
+	private QMatrix getScaleRotateM(final QMatrix params){
 		return getScaleRotateM(params, 1, 0);
 	}
 	
-	private QMatrix getScaleRotateM_q(final QMatrix params){
-		return getScaleRotateM_q(params, 1, 0);
-	}
-	
-	private SimpleMatrix getScaleRotateM(final double scale, final double theta){
+	private QMatrix getScaleRotateM(final double scale, final double theta){
 		return getScaleRotateM(null, scale, theta);
 	}
-	
-	private QMatrix getScaleRotateM_q(final double scale, final double theta){
-		return getScaleRotateM_q(null, scale, theta);
-	}
-	
-	private SimpleMatrix getScaleRotateM(final SimpleMatrix params, final double scale, final double theta){		
-        double scaleFactor = scale;
-        double rotateAngle = theta;
-        
-        if (params!=null){
-    		double a = params.get(0, 0);	
-            double b = params.get(1, 0);
-            
-            scaleFactor *= Math.sqrt(a*a + b*b);
-            
-            if (Math.abs(a) > 0.001){
-            	rotateAngle += Math.atan(b/a);
-            }
-        }
-		
-        double v1 = scaleFactor * Math.cos(rotateAngle);
-        double v2 = scaleFactor * Math.sin(rotateAngle);
-        
-		SimpleMatrix result = new SimpleMatrix(mModel.numPts*2, mModel.numPts*2);
-		result.set(0);
-		
-		for (int i=0; i<mModel.numPts; i++){
-			result.set(i*2, i*2, v1);
-			result.set(i*2+1, i*2+1, v1);	
-			result.set(i*2, i*2+1, -v2);
-			result.set(i*2+1, i*2, v2);
-		}
-		
-		return result;
-	}
 
-	private QMatrix getScaleRotateM_q(final QMatrix params, final double scale, final double theta){		
+	private QMatrix getScaleRotateM(final QMatrix params, final double scale, final double theta){		
         double scaleFactor = scale;
         double rotateAngle = theta;
         
@@ -217,42 +168,16 @@ public class FaceAlignProc implements Plotable{
 		
 		return result;
 	}
-
-	private SimpleMatrix getTranslateM(final SimpleMatrix params){
+	
+	private QMatrix getTranslateM(final QMatrix params){
 		return getTranslateM(params, 0, 0);
 	}
 	
-	private QMatrix getTranslateM_q(final QMatrix params){
-		return getTranslateM_q(params, 0, 0);
-	}
-	
-	private SimpleMatrix getTranslateM(final double offsetX, final double offsetY){
+	private QMatrix getTranslateM(final double offsetX, final double offsetY){
 		return getTranslateM(null, offsetX, offsetY);
 	}
 	
-	private QMatrix getTranslateM_q(final double offsetX, final double offsetY){
-		return getTranslateM_q(null, offsetX, offsetY);
-	}
-	
-	private SimpleMatrix getTranslateM(final SimpleMatrix params, final double offsetX, final double offsetY){
-		double x =  offsetX;
-		double y =  offsetY;
-		
-		if (params != null){
-			x += params.get(2,0);
-			y += params.get(3, 0);
-		}
-		
-		SimpleMatrix result = new SimpleMatrix(mModel.numPts*2, 1);
-		for (int i=0; i<mModel.numPts; i++){
-			result.set(i*2, 0, x);
-			result.set(i*2+1, 0, y);
-		}
-		
-		return result;
-	}
-	
-	private QMatrix getTranslateM_q(final QMatrix params, final double offsetX, final double offsetY){
+	private QMatrix getTranslateM(final QMatrix params, final double offsetX, final double offsetY){
 		double x =  offsetX;
 		double y =  offsetY;
 		
@@ -269,33 +194,16 @@ public class FaceAlignProc implements Plotable{
 		return result;
 	}
 	
-	private SimpleMatrix getShape(final SimpleMatrix params){
-		FuncTracer.startFunc();
-		
-		SimpleMatrix translate = getTranslateM(params);
-		SimpleMatrix sr = getScaleRotateM(params);
-		SimpleMatrix deviation = params.extractMatrix(4, mModel.numEVectors+4, 0, 1);
-		
-		SimpleMatrix evec = mModel.shapeModel.mEigenVectors;
-		SimpleMatrix mean = mModel.shapeModel.mMeanShape;
-		
-		SimpleMatrix result = sr.mult(mean.plus(evec.mult(deviation))).plus(translate);
-		
-		FuncTracer.endFunc();
-		
-		return result;
-
-	}
 	
-	private QMatrix getShape_q(final QMatrix params){
+	private QMatrix getShape(final QMatrix params){
 		FuncTracer.startFunc();
 		
-		QMatrix translate = getTranslateM_q(params);
-		QMatrix sr = getScaleRotateM_q(params);
+		QMatrix translate = getTranslateM(params);
+		QMatrix sr = getScaleRotateM(params);
 		QMatrix deviation = params.rows(4, mModel.numEVectors+4);
 		
-		QMatrix evec = mModel.shapeModel.mEigenVectors_q;
-		QMatrix mean = mModel.shapeModel.mMeanShape_q;
+		QMatrix evec = mModel.shapeModel.mEigenVectors;
+		QMatrix mean = mModel.shapeModel.mMeanShape;
 		
 		QMatrix result = evec.mult(deviation).plusSelf(mean).multRepSelf(sr).plusRepSelf(translate, RepMode.VERTICAL_ONLY);
 		
@@ -304,37 +212,17 @@ public class FaceAlignProc implements Plotable{
 		return result;
 
 	}
+
 	
-	private SimpleMatrix getCurrentShape(){
+	private QMatrix getCurrentShape(){
 		return getShape(mCurrentParams);
 	}
 	
-	private QMatrix getCurrentShape_q(){
-		return getShape_q(mCurrentParams_q);
-	}
-	
-	private SimpleMatrix regularizeParams(SimpleMatrix params){	
-		FuncTracer.startFunc();
-		for (int i=0; i<mModel.numEVectors; i++){
-			double value = params.get(i+4);
-			double constrain = mModel.shapeModel.mEigenConstraints.get(i);
-			
-			if (value > constrain){
-				params.set(i+4, constrain);
-			}
-			else if (value < -constrain){
-				params.set(i+4, -constrain);
-			}
-		}
-		FuncTracer.endFunc();
-		return params;
-	}
-	
-	private QMatrix regularizeParams_q(QMatrix params){	
+	private QMatrix regularizeParams(QMatrix params){	
 		FuncTracer.startFunc();
 		for (int i=0; i<mModel.numEVectors; i++){
 			float value = params.get(i+4, 0);
-			float constrain = mModel.shapeModel.mEigenConstraints_q.get(i, 0);
+			float constrain = mModel.shapeModel.mEigenConstraints.get(i, 0);
 			
 			if (value > constrain){
 				params.set(i+4, 0, constrain);
@@ -347,66 +235,14 @@ public class FaceAlignProc implements Plotable{
 		return params;
 	}
 	
-	private SimpleMatrix createJacobian (final SimpleMatrix params){
-		FuncTracer.startFunc();
-		
-		SimpleMatrix jac = new SimpleMatrix(mModel.numPts*2, mCurrentParams.numRows());
-		double j0,j1;
-		
-		SimpleMatrix meanShape = mModel.shapeModel.mMeanShape;
-		SimpleMatrix eigenVectors = mModel.shapeModel.mEigenVectors;
-		
-		for (int i=0; i<mModel.numPts; i++){
-			//1
-			j0 = meanShape.get(i*2);
-			j1 = meanShape.get(i*2+1);
-			
-			for (int j=0; j<eigenVectors.numCols(); j++){
-				j0 += params.get(j+4)*eigenVectors.get(i*2, j);
-				j1 += params.get(j+4)*eigenVectors.get(i*2+1, j);
-			}
-			jac.set(i*2, 0, j0);
-			jac.set(i*2+1, 0, j1);
-			
-			//2
-			j0 = meanShape.get(i*2+1);
-			j1 = meanShape.get(i*2);	
-			
-			for (int j=0; j<eigenVectors.numCols(); j++){
-				j0 += params.get(j+4)*eigenVectors.get(i*2+1, j);
-				j1 += params.get(j+4)*eigenVectors.get(i*2, j);
-			}
-			jac.set(i*2, 1, -j0);
-			jac.set(i*2+1, 1, j1);
-			
-			//3
-			jac.set(i*2, 2, 1);
-			jac.set(i*2+1, 2, 0);
-			
-			//4
-			jac.set(i*2, 3, 0);
-			jac.set(i*2+1, 3, 1);
-			
-			for (int j=0; j<eigenVectors.numCols(); j++){
-				j0 = params.get(0)*eigenVectors.get(i*2, j) - params.get(1)*eigenVectors.get(i*2+1, j);
-				j1 = params.get(0)*eigenVectors.get(i*2+1, j) + params.get(1)*eigenVectors.get(i*2, j);
-				jac.set(i*2, 4+j, j0);
-				jac.set(i*2+1, 4+j, j1);
-			}
-		}
-		
-		FuncTracer.endFunc();
-		return jac;
-	}
-	
-	private QMatrix createJacobian_q (final QMatrix params){
+	private QMatrix createJacobian (final QMatrix params){
 		FuncTracer.startFunc();
 		
 		QMatrix jac = new QMatrix(mModel.numPts*2, mCurrentParams.numRows());
 		float j0,j1;
 		
-		QMatrix meanShape = mModel.shapeModel.mMeanShape_q;
-		QMatrix eigenVectors = mModel.shapeModel.mEigenVectors_q;
+		QMatrix meanShape = mModel.shapeModel.mMeanShape;
+		QMatrix eigenVectors = mModel.shapeModel.mEigenVectors;
 	
 		
 		for (int i=0; i<mModel.numPts; i++){
@@ -452,40 +288,26 @@ public class FaceAlignProc implements Plotable{
 		return jac;
 	}
 	
-	private void updateCurrent(SimpleMatrix newPositions){
-		FuncTracer.startFunc();
-		
-		SimpleMatrix jacob = createJacobian(mCurrentParams);
-		SimpleMatrix transJacob = jacob.transpose();
-		mTempMat = new SimpleMatrix(mCurrentPositions);
-		SimpleMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minus(mCurrentPositions));
-		
-		mCurrentParams = regularizeParams(deltaParams.plus(mCurrentParams));
-		mCurrentPositions = getShape(mCurrentParams);
-		
-		FuncTracer.endFunc();
-	}
-	
-	private void updateCurrent_q(QMatrix newPositions){
+	private void updateCurrent(QMatrix newPositions){
 		FuncTracer.startFunc();
 
-		QMatrix jacob = createJacobian_q(mCurrentParams_q);
+		QMatrix jacob = createJacobian(mCurrentParams);
 		QMatrix transJacob = jacob.transpose();
 		
-		QMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minusSelf(mCurrentPositions_q));
+		QMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minusSelf(mCurrentPositions));
 		
-		mCurrentParams_q = regularizeParams_q(deltaParams.plus(mCurrentParams_q));
-		mCurrentPositions_q = getShape_q(mCurrentParams_q);
-		
-		mCurrentPositions_q.verify(mCurrentPositions);
+		mCurrentParams = regularizeParams(deltaParams.plusSelf(mCurrentParams));
+		mCurrentPositions = getShape(mCurrentParams);
+	
+		//mCurrentPositions.verify(mCurrentPositions);
 		
 		FuncTracer.endFunc();
 	}
 	
-	private SimpleMatrix doMeanShift(final float[] responseImg, final SimpleMatrix currPositions, final int variance){
+	private QMatrix doMeanShift(final float[] responseImg, final QMatrix currPositions, final int variance){
 		FuncTracer.startFunc();
 		
-		SimpleMatrix newPositions = new SimpleMatrix(mModel.numPts*2, 1);
+		QMatrix newPositions = new QMatrix(mModel.numPts*2, 1);
 		
 		float[] gaussKernel = new float[SEARCH_WIN_W*SEARCH_WIN_H];
 		
@@ -522,8 +344,8 @@ public class FaceAlignProc implements Plotable{
 				}
 			}
 
-			newPositions.set(i*2, numeratorX/denominator);
-			newPositions.set(i*2+1, numeratorY/denominator);
+			newPositions.set(i*2, (float)(numeratorX/denominator));
+			newPositions.set(i*2+1, (float)(numeratorY/denominator));
 		}
 		
 		FuncTracer.endFunc();
@@ -532,7 +354,7 @@ public class FaceAlignProc implements Plotable{
 	
 	private void searchMeanShift(float[] responseImg){
 		FuncTracer.startFunc();
-		
+		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 20));
 		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 10));
 		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 5));
 		updateCurrent(doMeanShift(responseImg, mCurrentPositions, 1));
@@ -540,35 +362,8 @@ public class FaceAlignProc implements Plotable{
 		FuncTracer.endFunc();
 	}
 	
-	private SimpleMatrix doChoosePeak(final float[] responseImg){
-		FuncTracer.startFunc();
-		
-		SimpleMatrix newPositions = new SimpleMatrix(mModel.numPts*2, 1);
-				
-		for (int i=0; i<mModel.numPts; i++){
-			double peak = 0;
-			int peakX = 0;
-			int peakY = 0;
-			int respImgOffset = i*SEARCH_WIN_W*SEARCH_WIN_H;
-			
-			for (int j=0; j<SEARCH_WIN_W; j++){
-				for (int k=0; k<SEARCH_WIN_H; k++){
-					if (responseImg[respImgOffset+k*SEARCH_WIN_W+j]>peak){
-						peak = responseImg[respImgOffset+k*SEARCH_WIN_W+j];
-						peakX = j;
-						peakY = k;
-					}
-				}
-			}
-
-			newPositions.set(i*2, 0, mCropPositions.get(i*2) - (SEARCH_WIN_W-1)/2 + peakX);
-			newPositions.set(i*2+1, 0, mCropPositions.get(i*2+1) - (SEARCH_WIN_H-1)/2 + peakY);
-		}
-		FuncTracer.endFunc();
-		return newPositions;
-	}
 	
-	private QMatrix doChoosePeak_q(final float[] responseImg){
+	private QMatrix doChoosePeak(final float[] responseImg){
 		FuncTracer.startFunc();
 		
 		QMatrix newPositions = new QMatrix(mModel.numPts*2, 1);
@@ -599,14 +394,7 @@ public class FaceAlignProc implements Plotable{
 	private void searchPeak(float[] responseImg){
 		FuncTracer.startFunc();
 		
-		
-		FuncTracer.startProc("SimpleMatrix_Search");
 		updateCurrent(doChoosePeak(responseImg));
-		FuncTracer.endProc("SimpleMatrix_Search");
-		
-		FuncTracer.startProc("QMatrix_Search");
-		updateCurrent_q(doChoosePeak_q(responseImg));
-		FuncTracer.endProc("QMatrix_Search");
 		
 		FuncTracer.endFunc();
 	}
@@ -622,7 +410,7 @@ public class FaceAlignProc implements Plotable{
 			mFilter.process(false);
 			searchPeak(mFilter.gerResponseImages());
 		}
-		else if (Algorithm.MEAN_SHIFT == type){
+		else if (Algorithm.KDE == type){
 			mFilter.process(true);
 			searchMeanShift(mFilter.gerResponseImages());
 		}
@@ -633,13 +421,10 @@ public class FaceAlignProc implements Plotable{
 		FuncTracer.endFunc();
 	}
 	
-	
-
-	
 	private byte[] cropPatches(){
 		FuncTracer.startFunc();
 		
-		SimpleMatrix currShape = getCurrentShape();
+		QMatrix currShape = getCurrentShape();
 		
 		int filterW = mModel.patchModel.sampleWidth;
 		int filterH = mModel.patchModel.sampleHeight;
@@ -673,95 +458,6 @@ public class FaceAlignProc implements Plotable{
 		return ret;
 	}
 	
-
-	
-	//For test only
-	private SimpleMatrix makeTestDate(SimpleMatrix params) {
-		SimpleMatrix ret = new SimpleMatrix(mModel.numPts*2, 1);
-		
-		SimpleMatrix translate;
-		SimpleMatrix sr;
-		SimpleMatrix deviation = new SimpleMatrix(params.extractMatrix(4, mModel.numEVectors+4, 0, 1));
-		
-		//Test translate
-		if (true){
-			translate = getTranslateM(params, 60,0);
-		}
-		else {
-			translate = getTranslateM(params);
-		}
-		
-		//Test rotation
-		if (false){
-			sr = getScaleRotateM(params, 1.2f, (float)(Math.PI/6));		
-		}
-		else {
-			sr = getScaleRotateM(params);
-		}
-		
-		//Test eigen vectors
-		if (true) {
-			//Check spca modeling at http://auduno.github.io/clmtrackr/examples/modelviewer_spca.html 
-			
-			// eigen values  |  3*sqrt(value)   |   usage
-			//________________________________________________________________________
-			//0: 637.328     |  75.735          |           pose turn left<- ->pose turn right
-			//1: 106.592     |  30.972          |             pose turn up<- ->pose turn down
-			//2: 30.445      |  16.551          |     surprise/happy/laugh<- ->Angry
-			//3: 17.036      |  12.381          |                  yelling<- ->keep silent
-			//4: 8.493       |  8.742           |  big eye-dist(oval face)<- ->small eye-dist (diamond face)
-			//5: 8.296       |  8.64            |             narrow mouth<- ->wide mouth
-			//6: 7.969       |  8.466           |              close mouth<- ->open mouth(talking)
-			//7: 6.810       |  7.827           |      skew face(to right)<- ->skew face(to left)
-			//8: 6.625       |  7.719           |                wide face<- ->narrow face
-			//9: 5.248       |  6.870           |               small eyes<- ->big eyes
-			//10: 5.211      |  6.846           |             right eye up<- ->left eye up
-			//11: 4.895      |  6.636           |    similar as 4?
-			//12: 4.783      |  6.561           |             long eyebrow<- ->short eyebrow
-			//13: 4.586      |  6.423           |    combination of 10 and 9    
-			//14: 3.976      |  5.979           |                feel pity<- ->smile/feel happy
-			//15: 3.905      |  5.928           |              narrow chin<- ->wide chin
-			//16: 3.124      |  5.301           |             chin to left<- ->chin to right
-			//17: 2.831      |  5.046           |          big brow center<- ->small brow center(long eye and brow)
-			//18: 2.7        |  4.929           |        high face contour<- ->low face contour fit
-			//19: 2.345      |  4.593           |      nose 2 l(mouth 2 r)<- ->nose to right(mouth to left)
-			
-			
-			float[] values = {
-					0f,   //0
-					0f,   //1
-					0f,   //2
-					0f,   //3
-					0f,   //4
-					0f,   //5
-					0f,   //6
-					0f,   //7
-					0f,   //8
-					0f,   //9
-					0f,   //10
-					0f,   //11
-					0f,   //12
-					0f,   //13
-					0f,   //14
-					0f,   //15
-					0f,   //16
-					0f,   //17
-					0f,   //18
-					0f,   //19
-					};
-			
-			for (int i=0; i<values.length; i++){
-				if (Math.abs(values[i]) > 0.0001){
-				    deviation.set(i, deviation.get(i) + values[i]);
-				}
-			}
-		}
-		else{
-			
-		}
-				
-		return sr.mult(mModel.shapeModel.mMeanShape.plus(mModel.shapeModel.mEigenVectors.mult(deviation))).plus(translate);
-	}
 	
 	public void plot(Canvas canvas, Paint paint){		
 		ShapeModel s = mModel.shapeModel;
@@ -879,86 +575,38 @@ public class FaceAlignProc implements Plotable{
 		if (test_PlotParams){
 			//Check spca modeling at http://auduno.github.io/clmtrackr/examples/modelviewer_spca.html 
 			
-			// eigen values  |  3*sqrt(value)   |   usage
-			//________________________________________________________________________
-			//0: 637.328     |  75.735          |           pose turn left<- ->pose turn right
-			//1: 106.592     |  30.972          |             pose turn up<- ->pose turn down
-			//2: 30.445      |  16.551          |     surprise/happy/laugh<- ->Angry
-			//3: 17.036      |  12.381          |                  yelling<- ->keep silent
-			//4: 8.493       |  8.742           |  big eye-dist(oval face)<- ->small eye-dist (diamond face)
-			//5: 8.296       |  8.64            |             narrow mouth<- ->wide mouth
-			//6: 7.969       |  8.466           |              close mouth<- ->open mouth(talking)
-			//7: 6.810       |  7.827           |      skew face(to right)<- ->skew face(to left)
-			//8: 6.625       |  7.719           |                wide face<- ->narrow face
-			//9: 5.248       |  6.870           |               small eyes<- ->big eyes
-			//10: 5.211      |  6.846           |             right eye up<- ->left eye up
-			//11: 4.895      |  6.636           |    similar as 4?
-			//12: 4.783      |  6.561           |             long eyebrow<- ->short eyebrow
-			//13: 4.586      |  6.423           |    combination of 10 and 9    
-			//14: 3.976      |  5.979           |                feel pity<- ->smile/feel happy
-			//15: 3.905      |  5.928           |              narrow chin<- ->wide chin
-			//16: 3.124      |  5.301           |             chin to left<- ->chin to right
-			//17: 2.831      |  5.046           |          big brow center<- ->small brow center(long eye and brow)
-			//18: 2.7        |  4.929           |        high face contour<- ->low face contour fit
-			//19: 2.345      |  4.593           |      nose 2 l(mouth 2 r)<- ->nose to right(mouth to left)
-			
-			
 			Paint pt = new Paint();
-			int font = 30;
 			pt.setColor(0xFF00FF00);
-			pt.setTextSize(font);
+			pt.setTextSize(30);
 			String text = new String();
 			
 			String[] paramLabels = {
-					"left/right: ",
-					"up/down: ",
-					"laugth/angry: ",
-					"yelling/silient: ",
-					"oval/diamond face: ",
-					"narrow/wide mouth: ",
-					"close/open mouth: ",
-					"skew to right/left: ",
-					"wide/narrow face: ",
-					"small/big eyes: ",
-					"right/left eye up: ",
-					"oval/diamond face??: ",
-					"long/short eyebrow: ",
-					"xxx: ",
-					"feel pity/happy: ",
-					"narrow/wide chin: ",
-					"chin to left/right: ",
-					"big/small brow center: ",
-					"high/low face contour: ",
-					"nose to left/right against mouth: "
+			/*1*/	"left/right: ",
+			/*2*/	"up/down: ",
+			/*3*/	"laugth/angry: ",
+			/*4*/	"yelling/silient: ",
+			/*5*/	"oval/diamond face: ",
+			/*6*/	"narrow/wide mouth: ",
+			/*7*/	"close/open mouth: ",
+			/*8*/	"skew to right/left: ",
+			/*9*/	"wide/narrow face: ",
+			/*10*/	"small/big eyes: ",
+			/*11*/	"right/left eye up: ",
+			/*12*/	"oval/diamond face??: ",
+			/*13*/	"long/short eyebrow: ",
+			/*14*/	"xxx: ",
+			/*15*/	"feel pity/happy: ",
+			/*16*/	"narrow/wide chin: ",
+			/*17*/	"chin to left/right: ",
+			/*18*/	"big/small brow center: ",
+			/*19*/	"high/low face contour: ",
+			/*20*/	"nose to left/right against mouth: "
 			};
 			
-			float[] paramsLimit = {
-					75.735f,
-					30.972f,
-					16.551f,
-					12.381f,
-					8.742f,
-					8.64f,
-					8.466f,
-					7.827f,
-					7.719f, 
-					6.870f,
-					6.846f,
-					6.636f,
-					6.561f,
-					6.423f,
-					5.979f, 
-					5.928f,
-					5.301f,
-					5.046f, 
-					4.929f, 
-					4.593f 
-			};
-			
-			for (int i=0; i<paramsLimit.length; i++){
-				int value = (int)((mCurrentParams.get(i+4) * 50)/paramsLimit[i]) + 50;
+			for (int i=0; i<mModel.shapeModel.mEigenConstraints.length(); i++){
+				int value = (int)((mCurrentParams.get(i+4) * 50)/mModel.shapeModel.mEigenConstraints.get(i)) + 50;
 				
-				canvas.drawText(paramLabels[i] + value + "/100", 0, (i+1)*(font+5), pt);		
+				canvas.drawText(paramLabels[i] + value + "/100", 0, (i+1)*(30+5), pt);		
 			}
 		}
 	}
@@ -966,13 +614,15 @@ public class FaceAlignProc implements Plotable{
 	public enum Algorithm {
 		ASM,
 		CQF, //Not implemented
-		MEAN_SHIFT 
+		KDE 
 	};
 	
+	private static final String TAG = "FaceAlignProc";
+
+	private static final int INITIAL_FIT_MIN_DIM = 100;
+
 	private static final int SEARCH_WIN_W = 11;
 	private static final int SEARCH_WIN_H = 11;
-	private static final int INITIAL_FIT_SCALE_FACTOR = 10;
-	private static final String TAG = "FaceDetector";
 	
 	//Image Data
 	private int mImageW;
@@ -982,17 +632,11 @@ public class FaceAlignProc implements Plotable{
 	
 	private FaceModel mModel;
 	
-	//Fit data / result
-	private SimpleMatrix mOriginalPositions; //The positions for initial guess
-	private SimpleMatrix mCropPositions;   //The positions for patch cropped
-	private SimpleMatrix mCurrentPositions;  //The positions for current calculated
-	private SimpleMatrix mCurrentParams;
-	private SimpleMatrix mTempMat;
-	
-	private QMatrix mOriginalPositions_q; //The positions for initial guess
-	private QMatrix mCropPositions_q;   //The positions for patch cropped
-	private QMatrix mCurrentPositions_q;  //The positions for current calculated
-	private QMatrix mCurrentParams_q;	
+	//Fit data / result	
+	private QMatrix mOriginalPositions; //The positions for initial guess
+	private QMatrix mCropPositions;   //The positions for patch cropped
+	private QMatrix mCurrentPositions;  //The positions for current calculated
+	private QMatrix mCurrentParams;	
 	
 	private Filter2D mFilter;
 	
@@ -1000,7 +644,7 @@ public class FaceAlignProc implements Plotable{
 	private boolean test_PlotContour = true;
 	private boolean test_PlotPts = false;
 	
-	private boolean test_PlotOriginal = false;
+	private boolean test_PlotOriginal = true;
 	
 	private boolean test_PlotParams = true;
 	
