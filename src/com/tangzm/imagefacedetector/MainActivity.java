@@ -84,13 +84,8 @@ public class MainActivity extends Activity implements OnClickListener{
 					proc.init(appCntx, model);
 				}
 				
-				proc.searchInImage(appCntx, currPic);
+				proc.searchInImage(appCntx, currPic, Algorithm.CQF);
 				
-				//Debug.startMethodTracing("optimize", 100*1024*1024);
-				for (int t=0; t<5; t++){
-					proc.optimize(Algorithm.CQF);
-				}
-				//Debug.stopMethodTracing();
 				FuncTracer.endProc("Fit");
 				imgFrame.addPlot(proc);
 			}

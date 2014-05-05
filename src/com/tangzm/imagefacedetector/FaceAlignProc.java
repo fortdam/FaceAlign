@@ -1,7 +1,6 @@
 package com.tangzm.imagefacedetector;
 
-import com.tangzm.imagefacedetector.Filter2D.ResponseType;
-import com.tangzm.imagefacedetector.QMatrix.RepMode;
+import java.util.ArrayList;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -16,10 +15,15 @@ import android.renderscript.RenderScript;
 import android.renderscript.Type;
 import android.util.Log;
 
+import com.tangzm.imagefacedetector.Filter2D.ResponseType;
+import com.tangzm.imagefacedetector.QMatrix.RepMode;
+
 
 public class FaceAlignProc implements Plotable{
 	
 	public void init(Context ctx, FaceModel model){
+        QMatrix.init(ctx);
+
 		mModel = model;
 		
         mFilter = new Filter2D(
@@ -33,7 +37,7 @@ public class FaceAlignProc implements Plotable{
         		(mModel.patchModel.sampleWidth+SEARCH_WIN_W-1),
         		(mModel.patchModel.sampleHeight+SEARCH_WIN_H-1));
         
-        QMatrix.init(ctx);
+        mParamHist = new ArrayList<QMatrix>();
 	}
 	
 	private float[] makeInitialGuess(Bitmap bmp){
@@ -64,24 +68,40 @@ public class FaceAlignProc implements Plotable{
 		return ret;
 	}
 	
-	public void searchInImage(Context ctx, Bitmap image) throws Exception{
-		FuncTracer.startFunc();
+	public void searchInImage(Context ctx, Bitmap image, Algorithm type) throws Exception{
+		FuncTracer.startFunc();		
 		
-		float[] eyePositions = makeInitialGuess(image);
+		startSearch(ctx, image);
 		
-		if (null == eyePositions){
-			throw new Exception("Can not find face");
-		}
-		
-		searchInImage(ctx, image, eyePositions[0], eyePositions[1], eyePositions[2], eyePositions[3]);
+		do {
+			optimize(type);
+		} while(false == checkConvergence());
 		
 		FuncTracer.endFunc();
 	}
 	
-	public void searchInImage(Context ctx, Bitmap image, float leftX, float leftY, float rightX, float rightY) throws Exception{
+	private void startSearch(Context ctx, Bitmap image) throws Exception{		
 		if (null == mModel){
 			throw new Exception("Not initialized");
 		}
+		
+		mOriginalPositions = null;
+		mCropPositions = null;
+		mCurrentPositions = null;
+		mCurrentParams = null;	
+		mParamHist.clear();
+		mOptCount = 0;
+		
+		float[] eyePositions = makeInitialGuess(image);
+		
+		if (null == eyePositions) {
+			throw new Exception("Can not find face");
+		}
+		
+		float leftX = eyePositions[0];
+		float leftY = eyePositions[1];
+		float rightX = eyePositions[2];
+		float rightY = eyePositions[3];
 				
 		int leftEyeIndex = mModel.pathModel.paths[mModel.pathModel.paths.length-2][0];
 		int rightEyeIndex = mModel.pathModel.paths[mModel.pathModel.paths.length-1][0];
@@ -131,7 +151,8 @@ public class FaceAlignProc implements Plotable{
         outAlloc.copyTo(mImgGrayScaled);		
         
         mCurrentPositions = getCurrentShape();
-        mOriginalPositions = new QMatrix(mCurrentPositions, true);       
+        mOriginalPositions = new QMatrix(mCurrentPositions, true);
+        mParamHist.add(new QMatrix(mCurrentParams, true));
 	}
 	
 	private QMatrix getScaleRotateM(final QMatrix params){
@@ -315,8 +336,17 @@ public class FaceAlignProc implements Plotable{
 			}
 			
 			currPtsConv.set(2, currPtsConv.get(1));
-			
+
 			QMatrix invConvPts = currPtsConv.invert();
+			
+			if (Float.isNaN(invConvPts.get(0)) ||
+					Float.isNaN(invConvPts.get(1)) ||
+					Float.isNaN(invConvPts.get(2)) ||
+					Float.isNaN(invConvPts.get(3))) {
+				//in extreme case, we just ignore this point
+				invConvPts.set(0, zeros); 
+			}
+				
 			
 			result.set(i*2, i*2, invConvPts.get(0));
 			result.set(i*2+1, i*2, invConvPts.get(1));
@@ -329,17 +359,17 @@ public class FaceAlignProc implements Plotable{
 	
 	private void updateCurrent(QMatrix newPositions){
 		FuncTracer.startFunc();
-
+		
 		QMatrix jacob = createJacobian(mCurrentParams);
 		QMatrix transJacob = jacob.transpose();
-		
+				
 		QMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minusSelf(mCurrentPositions));
-		
+       
+		Log.i(TAG, "The deltaParam sum = " + deltaParams.innerProduct());
+
 		mCurrentParams = regularizeParams(deltaParams.plusSelf(mCurrentParams));
 		mCurrentPositions = getShape(mCurrentParams);
-	
-		//mCurrentPositions.verify(mCurrentPositions);
-		
+			
 		FuncTracer.endFunc();
 	}
 	
@@ -348,10 +378,8 @@ public class FaceAlignProc implements Plotable{
 		QMatrix jacob = createJacobian(mCurrentParams);
 		QMatrix transJacob = jacob.transpose();
 		QMatrix invCovariance = createInvCovariance(newPositions, responseImg);
-		
+		newPositions.printOut();
 		invCovariance.printOut();
-
-		
 		QMatrix deltaParams = transJacob.mult(invCovariance).mult(jacob).invert().mult(transJacob).mult(invCovariance).mult(newPositions.minusSelf(mCurrentPositions));
 		
 		mCurrentParams = regularizeParams(deltaParams.plusSelf(mCurrentParams));
@@ -384,11 +412,10 @@ public class FaceAlignProc implements Plotable{
 					double dX = dXBase+k;
 					double dY = dYBase+j;
 
-
 					gaussKernel[j*SEARCH_WIN_W + k] = (float)(Math.exp(-0.5*(dX*dX+dY*dY)/variance)) * 
 							responseImg[respImgOffset+j*SEARCH_WIN_W+k];					
 					
-					denominator += gaussKernel[j*SEARCH_WIN_W + k];
+					denominator += gaussKernel[j*SEARCH_WIN_W + k];					
 				}
 			}
 			
@@ -444,7 +471,7 @@ public class FaceAlignProc implements Plotable{
 		FuncTracer.startFunc();
 		
 		QMatrix meanPositions = doChooseMean(responseImg);
-		
+				
 		updateCurrentCQF(meanPositions, responseImg);
 		
 		FuncTracer.endFunc();
@@ -486,29 +513,59 @@ public class FaceAlignProc implements Plotable{
 		FuncTracer.endFunc();
 	}
 	
-	public void optimize(Algorithm type) throws Exception{
+	private boolean checkConvergence() {
+		if (mOptCount > OPTIMIZATION_LIMIT) {
+			return true;
+		}
+		
+		if (mParamHist.size() >= 3) {
+			QMatrix currentParam = mParamHist.get(mParamHist.size()-1);
+			QMatrix lastParam = mParamHist.get(mParamHist.size()-2);
+			QMatrix lastlastParam = mParamHist.get(mParamHist.size()-3);
+			
+			float currDiff = currentParam.minus(lastParam).innerProduct();
+			float lastDiff = currentParam.minus(lastlastParam).innerProduct();
+			
+			Log.v(TAG, "optimize: currentDiff="+currDiff+" lastDiff="+lastDiff);
+			
+			if (currDiff > lastDiff || currDiff < CONVERGENCE_THRESHOLD) {
+				return true;
+			}
+		}
+		
+		return false;
+	}
+	
+	private void optimize(Algorithm type) throws Exception{
 		FuncTracer.startFunc();
 		
 		//Get Filter response
 		mFilter.setPatches(cropPatches());
 		
-		//Optimize algorithm
-		if (Algorithm.ASM == type){
-			mFilter.process(ResponseType.RAW);
-			searchPeak(mFilter.gerResponseImages());
-		}
-		else if (Algorithm.CQF == type) {
+		switch(type){	
+		case CQF:
 			mFilter.process(ResponseType.REG_NORMALIZED);
 			searchConvQuadFit(mFilter.gerResponseImages());
-		}
-		else if (Algorithm.KDE == type) {
+			break;
+			
+		case KDE:
 			mFilter.process(ResponseType.REGULARIZED);
 			searchMeanShift(mFilter.gerResponseImages());
-		}
-		else {
-			throw new Exception("Unsupported algorithm");
+			break;
+			
+		case ASM:
+		default:
+			mFilter.process(ResponseType.RAW);
+			searchPeak(mFilter.gerResponseImages());
+			break;
 		}
 		
+		mParamHist.add(new QMatrix(mCurrentParams, true));
+		while (mParamHist.size() > PARAM_HIST_SIZE) {
+			mParamHist.remove(0);
+		}
+		
+		mOptCount++;
 		FuncTracer.endFunc();
 	}
 	
@@ -536,10 +593,13 @@ public class FaceAlignProc implements Plotable{
 					int posY =  centerY + shiftH + j;
 					
 					if (posX<0 || posY<0 || posX>mImageW || posY>mImageH){ //out of image
-						ret[i*patchW*patchH+j*patchW+k] = 0; //set as black
+						ret[i*patchW*patchH+j*patchW+k] = 100; //set as black 
+						//Log.i(TAG, "index="+(patchW*patchH+j*patchW+k)+"val="+0);
 					}
 					else {						
 						ret[i*patchW*patchH+j*patchW+k] = (mImgGrayScaled[(int)(posY*mImageW) + posX]);
+						//Log.i(TAG, "index="+(i*patchW*patchH+j*patchW+k)+"val="+(mImgGrayScaled[(int)(posY*mImageW) + posX]));
+
 					}
 				}
 			}
@@ -702,10 +762,19 @@ public class FaceAlignProc implements Plotable{
 		}
 	}
 	
+	public enum Parameter {
+		POSE_LEFT_RIGHT,
+		POSE_DOWN_UP,
+		EXP_SURPRISE_BORING,
+		MOUTH_OPEN_CLOSE,
+		FACE_FAT_THIN
+	}
+	
 	public enum Algorithm {
+		DEFAULT,
 		ASM,
-		CQF, //Not implemented
-		KDE 
+		CQF,
+		KDE,
 	};
 	
 	private static final String TAG = "FaceAlignProc";
@@ -714,6 +783,11 @@ public class FaceAlignProc implements Plotable{
 
 	private static final int SEARCH_WIN_W = 11;
 	private static final int SEARCH_WIN_H = 11;
+	
+	private static final int PARAM_HIST_SIZE = 3;
+	
+	private static final float CONVERGENCE_THRESHOLD = 1.5f;
+	private static final int OPTIMIZATION_LIMIT = 15;
 	
 	//Image Data
 	private int mImageW;
@@ -728,6 +802,10 @@ public class FaceAlignProc implements Plotable{
 	private QMatrix mCropPositions;   //The positions for patch cropped
 	private QMatrix mCurrentPositions;  //The positions for current calculated
 	private QMatrix mCurrentParams;	
+	
+	private ArrayList<QMatrix> mParamHist;
+	
+	private int mOptCount;
 	
 	private Filter2D mFilter;
 	

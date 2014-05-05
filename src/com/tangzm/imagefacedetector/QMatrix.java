@@ -299,10 +299,6 @@ public class QMatrix {
 			return;
 		}
 		
-		if (mLUMat != null) {
-			return;
-		}
-		
 		mLUMat = new float[mRows*mColumns];
 		mPMat = new int[mRows];
 		float[] tempLine = new float[mColumns];
@@ -342,6 +338,22 @@ public class QMatrix {
 			}
 		}
 	}
+	
+	private QMatrix multSlow(QMatrix another) {
+		QMatrix result = new QMatrix(mRows, another.mColumns);
+
+		for (int i=0; i<mRows; i++) {
+			for (int j=0; j<another.mColumns; j++){
+				float value = 0;
+				for (int k=0; k<mColumns; k++) {
+					value += get(i,k)*another.get(k, j);
+				}
+				result.set(i, j, value);
+			}
+		}
+		
+		return result;
+	}
 
 	public QMatrix mult(QMatrix another) {
 		if (STRICT_MODE && mColumns!=another.mRows) {
@@ -349,27 +361,53 @@ public class QMatrix {
 			return null;
 		}
 		
-		QMatrix result = new QMatrix(mRows, another.mColumns);
-		
-		Allocation op1Mat = Allocation.createSized(mRS, Element.F32(mRS), mRows*mColumns);
-		Allocation op2Mat = Allocation.createSized(mRS, Element.F32(mRS), another.mRows*another.mColumns);
-		Allocation resultMat = Allocation.createSized(mRS, Element.F32(mRS), mRows*another.mColumns);
-		Allocation index = Allocation.createTyped(mRS, mTB.setX(another.mColumns).setY(mRows).create());
-		
-		op1Mat.copyFrom(mData);
-		op2Mat.copyFrom(another.mData);
-		
-		mScript.bind_opMat1(op1Mat);
-		mScript.bind_opMat2(op2Mat);
-		mScript.bind_resultMat(resultMat);
-		mScript.set_numRow(mRows);
-		mScript.set_numColumn(another.mColumns);
-		mScript.set_dim(mColumns);
-		
-		mScript.forEach_muliply(index);
-		
-		resultMat.copyTo(result.mData);
-		
+		if (mRows*mColumns*another.mColumns < 1000) {
+			return multSlow(another);
+		}
+		else {
+			QMatrix result = new QMatrix(mRows, another.mColumns);
+
+			Allocation op1Mat = Allocation.createSized(mRS, Element.F32(mRS), mRows*mColumns);
+			Allocation op2Mat = Allocation.createSized(mRS, Element.F32(mRS), another.mRows*another.mColumns);
+			Allocation resultMat = Allocation.createSized(mRS, Element.F32(mRS), mRows*another.mColumns);
+			Allocation index = Allocation.createTyped(mRS, mTB.setX(another.mColumns).setY(mRows).create());
+			
+			op1Mat.copyFrom(mData);
+			op2Mat.copyFrom(another.mData);
+			
+			mScript.bind_opMat1(op1Mat);
+			mScript.bind_opMat2(op2Mat);
+			mScript.bind_resultMat(resultMat);
+			mScript.set_numRow(mRows);
+			mScript.set_numColumn(another.mColumns);
+			mScript.set_dim(mColumns);
+			
+			mScript.forEach_muliply(index);
+			
+			resultMat.copyTo(result.mData);
+			
+			return result;
+		}
+	}
+	
+	private QMatrix resolveSlow(QMatrix result) {
+		for (int i=0; i<mColumns; i++) {
+			for (int j=0; j<mRows; j++) {
+				float sum = 0;
+				for (int k=0; k<j; k++) {
+					sum += mLUMat[j*mColumns+k] * result.mData[k*mColumns+i];
+				}
+				result.mData[j*mColumns+i] = result.mData[j*mColumns+i] - sum;
+			}
+			
+			for (int j=mRows-1; j>=0; j--) {
+				float sum = 0;
+				for (int k=mRows-1; k>j; k--) {
+					sum += mLUMat[j*mColumns+k] * result.mData[k*mColumns+i];
+				}
+				result.mData[j*mColumns+i] = (result.mData[j*mColumns+i] - sum)/mLUMat[j*mColumns+j];
+			}
+		}
 		return result;
 	}
 	
@@ -387,7 +425,11 @@ public class QMatrix {
 			result.set(i*mColumns + mPMat[i], 1);
 		}
 		
-		if (mRows > 5) { //use renderscript if the matrix is "big"
+		if (mRows <= 5) { 
+			result = resolveSlow(result);
+		}
+		else {
+			//use renderscript if the matrix is "big"
 			Allocation op1Mat = Allocation.createSized(mRS, Element.F32(mRS), mRows*mColumns);
 			Allocation resultMat = Allocation.createSized(mRS, Element.F32(mRS), mRows*mColumns);
 			Allocation index = Allocation.createTyped(mRS, mTB.setX(mColumns).setY(1).create());
@@ -405,31 +447,33 @@ public class QMatrix {
 			
 			resultMat.copyTo(result.mData);
 		}
-		else {//Otherwise we compute by java.
-			for (int i=0; i<mColumns; i++) {
-				for (int j=0; j<mRows; j++) {
-					float sum = 0;
-					for (int k=0; k<j; k++) {
-						sum += mLUMat[j*mColumns+k] * result.mData[k*mColumns+i];
-					}
-					result.mData[j*mColumns+i] = result.mData[j*mColumns+i] - sum;
-				}
-				
-				for (int j=mRows-1; j>=0; j--) {
-					float sum = 0;
-					for (int k=mRows-1; k>j; k--) {
-						sum += mLUMat[j*mColumns+k] * result.mData[k*mColumns+i];
-					}
-					result.mData[j*mColumns+i] = (result.mData[j*mColumns+i] - sum)/mLUMat[j*mColumns+j];
-				}
-			}
-			
-
+		
+		return result;
+	}
+	
+	public float sum() {
+		float result = 0;
+		
+		for (int i=0; i<mData.length; i++){
+			result += mData[i];
 		}
 		
 		return result;
 	}
 	
+	public float innerProduct() {
+		if (STRICT_MODE && mColumns>1 && mRows>1) {
+			Log.e(TAG, "Exception: Size error on calculating inner-product QMatrix");
+			return 0;			
+		}
+		
+		if (mColumns == 1){
+			return this.transpose().mult(this).sum();
+		}
+		else {
+			return mult(this.transpose()).sum();
+		}
+	}
 	
 	public boolean verify(SimpleMatrix ref){
 		final float EPSILON = 0.001f;

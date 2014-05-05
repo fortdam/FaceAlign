@@ -119,6 +119,11 @@ public class Filter2D {
 	}
 	
 	public float[] gerResponseImages(){
+		for (int i=0; i<mResponse.length; i++) {
+			if (Float.isNaN(mResponse[i])) {
+				mResponse[i] = 0;
+			}
+		}
 		return mResponse;
 	}
 	
