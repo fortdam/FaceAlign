@@ -1,4 +1,4 @@
-package com.tangzm.imagefacedetector;
+package com.tangzm.facedetect;
 
 import java.util.ArrayList;
 
@@ -15,8 +15,9 @@ import android.renderscript.RenderScript;
 import android.renderscript.Type;
 import android.util.Log;
 
-import com.tangzm.imagefacedetector.Filter2D.ResponseType;
-import com.tangzm.imagefacedetector.QMatrix.RepMode;
+import com.tangzm.facedetect.Filter2D.ResponseType;
+import com.tangzm.facedetect.QMatrix.RepMode;
+import com.tangzm.facedetect.ScriptC_im2float;
 
 
 public class FaceAlignProc{
@@ -241,7 +242,6 @@ public class FaceAlignProc{
 	}
 	
 	private QMatrix regularizeParams(QMatrix params){	
-		FuncTracer.startFunc();
 		for (int i=0; i<mModel.numEVectors; i++){
 			float value = params.get(i+4, 0);
 			float constrain = mModel.shapeModel.mEigenConstraints.get(i, 0);
@@ -253,7 +253,6 @@ public class FaceAlignProc{
 				params.set(i+4, 0, -constrain);
 			}
 		}
-		FuncTracer.endFunc();
 		return params;
 	}
 	
@@ -933,12 +932,12 @@ public class FaceAlignProc{
 	private Filter2D mFilter;
 	
 	//For test 
-	private boolean test_PlotContour = false;
-	private boolean test_PlotPts = true;
+	private boolean test_PlotContour = true;
+	private boolean test_PlotPts = false;
 	
 	private boolean test_PlotOriginal = false;
 	
-	private boolean test_PlotParams = true;
+	private boolean test_PlotParams = false;
 	
 	private boolean test_PlotPatch = false;
 	private boolean test_PlotResponse = false;

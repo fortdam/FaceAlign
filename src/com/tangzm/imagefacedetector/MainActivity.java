@@ -1,7 +1,5 @@
 package com.tangzm.imagefacedetector;
 
-import org.opencv.android.BaseLoaderCallback;
-import org.opencv.android.LoaderCallbackInterface;
 
 import android.app.Activity;
 import android.content.Context;
@@ -21,9 +19,12 @@ import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
 
-import com.tangzm.imagefacedetector.FaceAlignProc.Algorithm;
-import com.tangzm.imagefacedetector.FaceAlignProc.Organ;
-import com.tangzm.imagefacedetector.FaceAlignProc.Parameter;
+import com.tangzm.facedetect.FaceAlignProc;
+import com.tangzm.facedetect.FaceModel;
+import com.tangzm.facedetect.FuncTracer;
+import com.tangzm.facedetect.FaceAlignProc.Algorithm;
+import com.tangzm.facedetect.FaceAlignProc.Organ;
+import com.tangzm.facedetect.FaceAlignProc.Parameter;
 
 public class MainActivity extends Activity implements OnClickListener{
 

@@ -1,4 +1,6 @@
-package com.tangzm.imagefacedetector;
+package com.tangzm.facedetect;
+
+import com.tangzm.facedetect.ScriptC_filter2d;
 
 import android.content.Context;
 import android.renderscript.Allocation;
@@ -12,7 +14,7 @@ public class Filter2D {
 		
 		mRS = RenderScript.create(ctx);
 		
-		mScript = new ScriptC_filter2d(mRS, ctx.getResources(), R.raw.filter2d);
+		mScript = new ScriptC_filter2d(mRS);
 		
 		int responseSize = (patchW-filterW+1)*(patchH-filterH+1);
 		mResponse = new float[responseSize*numPatch];

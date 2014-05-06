@@ -1,6 +1,8 @@
-package com.tangzm.imagefacedetector;
+package com.tangzm.facedetect;
 
 import java.util.Stack;
+
+import com.tangzm.imagefacedetector.BuildConfig;
 
 import android.util.Log;
 

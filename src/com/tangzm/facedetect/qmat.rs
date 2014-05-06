@@ -1,5 +1,5 @@
 #pragma version(1)
-#pragma rs java_package_name(com.tangzm.imagefacedetector)
+#pragma rs java_package_name(com.tangzm.facedetect)
 #pragma rs_fp_full
 
 float* opMat1;

@@ -1,5 +1,5 @@
 #pragma version(1)
-#pragma rs java_package_name(com.tangzm.imagefacedetector)
+#pragma rs java_package_name(com.tangzm.facedetect)
 
 int patchNum;
 int patchWidth;

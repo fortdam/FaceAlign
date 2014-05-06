@@ -1,6 +1,8 @@
-package com.tangzm.imagefacedetector;
+package com.tangzm.facedetect;
 
 import org.ejml.simple.SimpleMatrix;
+
+import com.tangzm.facedetect.ScriptC_qmat;
 
 import android.content.Context;
 import android.renderscript.Allocation;

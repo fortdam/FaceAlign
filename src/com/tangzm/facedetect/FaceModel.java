@@ -1,4 +1,4 @@
-package com.tangzm.imagefacedetector;
+package com.tangzm.facedetect;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -11,12 +11,8 @@ import org.json.JSONObject;
 
 import android.content.Context;
 
-interface FaceModelCallback {
-	void modeLoaded();
-}
 
-public class FaceModel {
-	
+public class FaceModel {	
 	public ShapeModel shapeModel;
 	public PatchModel patchModel;
 	public PathModel  pathModel;
