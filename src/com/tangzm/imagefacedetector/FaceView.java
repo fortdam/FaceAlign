@@ -6,11 +6,12 @@ import android.graphics.Paint;
 import android.util.AttributeSet;
 import android.widget.ImageView;
 
-interface Plotable {
-	void plot(Canvas canvas, Paint paint);
-}
+
 
 public class FaceView extends ImageView{
+	interface Plotable {
+		void plot(Canvas canvas);
+	}
 	
 	private Paint currentPaint;
 	private Plotable p;
@@ -33,6 +34,6 @@ public class FaceView extends ImageView{
 		super.onDraw(canvas);
 		//canvas.drawLine(100, 100, 600, 600, currentPaint);
 		if (null != p)
-			p.plot(canvas, currentPaint);
+			p.plot(canvas);
 	}
 }

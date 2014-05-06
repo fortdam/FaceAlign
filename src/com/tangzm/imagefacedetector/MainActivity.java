@@ -7,6 +7,8 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.Bitmap.Config;
 import android.graphics.PointF;
 import android.media.FaceDetector;
@@ -20,17 +22,34 @@ import android.view.View;
 import android.view.View.OnClickListener;
 
 import com.tangzm.imagefacedetector.FaceAlignProc.Algorithm;
+import com.tangzm.imagefacedetector.FaceAlignProc.Organ;
+import com.tangzm.imagefacedetector.FaceAlignProc.Parameter;
 
 public class MainActivity extends Activity implements OnClickListener{
 
-	static final String TAG="ImageFaceDetect";
-	static final int GALLERY_INTENT_ID = 0x1515;
+	private static final String TAG="ImageFaceDetect";
+	private static final int GALLERY_INTENT_ID = 0x1515;
 
 	private FaceModel model = null;
 	private FaceAlignProc proc = null;
 	private FaceView imgFrame = null;
 	private Bitmap currPic = null;
 	private Context appCntx = null;
+	
+	
+	private class DrawProc implements FaceView.Plotable {
+		
+		public DrawProc(FaceAlignProc proc) {
+			mProc = proc;
+		}
+		
+		public void plot(Canvas canvas){
+			mProc.drawTestInfo(canvas);
+		}
+		
+		private FaceAlignProc mProc;
+	};
+	
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -61,7 +80,7 @@ public class MainActivity extends Activity implements OnClickListener{
 	public void onClick(View arg0) {
 		startGalleryForPic();
 	}
-	
+
 	@Override
 	protected void onActivityResult (int requestCode, int resultCode, Intent data){
 		if (GALLERY_INTENT_ID == requestCode){
@@ -84,10 +103,10 @@ public class MainActivity extends Activity implements OnClickListener{
 					proc.init(appCntx, model);
 				}
 				
-				proc.searchInImage(appCntx, currPic, Algorithm.CQF);
+				proc.searchInImage(appCntx, currPic, Algorithm.ASM);
 				
 				FuncTracer.endProc("Fit");
-				imgFrame.addPlot(proc);
+				imgFrame.addPlot(new DrawProc(proc));
 			}
 			catch(Exception e){
 				FuncTracer.procException(e);

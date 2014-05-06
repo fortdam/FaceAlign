@@ -19,7 +19,7 @@ import com.tangzm.imagefacedetector.Filter2D.ResponseType;
 import com.tangzm.imagefacedetector.QMatrix.RepMode;
 
 
-public class FaceAlignProc implements Plotable{
+public class FaceAlignProc{
 	
 	public void init(Context ctx, FaceModel model){
         QMatrix.init(ctx);
@@ -610,7 +610,7 @@ public class FaceAlignProc implements Plotable{
 	}
 	
 	
-	public void plot(Canvas canvas, Paint paint){		
+	public void drawTestInfo(Canvas canvas){		
 		ShapeModel s = mModel.shapeModel;
 		PathModel path = mModel.pathModel;
 		
@@ -731,44 +731,167 @@ public class FaceAlignProc implements Plotable{
 			pt.setTextSize(30);
 			String text = new String();
 			
-			String[] paramLabels = {
-			/*1*/	"left/right: ",
-			/*2*/	"up/down: ",
-			/*3*/	"laugth/angry: ",
-			/*4*/	"yelling/silient: ",
-			/*5*/	"oval/diamond face: ",
-			/*6*/	"narrow/wide mouth: ",
-			/*7*/	"close/open mouth: ",
-			/*8*/	"skew to right/left: ",
-			/*9*/	"wide/narrow face: ",
-			/*10*/	"small/big eyes: ",
-			/*11*/	"right/left eye up: ",
-			/*12*/	"oval/diamond face??: ",
-			/*13*/	"long/short eyebrow: ",
-			/*14*/	"xxx: ",
-			/*15*/	"feel pity/happy: ",
-			/*16*/	"narrow/wide chin: ",
-			/*17*/	"chin to left/right: ",
-			/*18*/	"big/small brow center: ",
-			/*19*/	"high/low face contour: ",
-			/*20*/	"nose to left/right against mouth: "
-			};
-			
 			for (int i=0; i<mModel.shapeModel.mEigenConstraints.length(); i++){
 				int value = (int)((mCurrentParams.get(i+4) * 50)/mModel.shapeModel.mEigenConstraints.get(i)) + 50;
 				
-				canvas.drawText(paramLabels[i] + value + "/100", 0, (i+1)*(30+5), pt);		
+				canvas.drawText(Parameter.fromInteger(i).desciption()+ ": " + value + "/100", 0, (i+1)*(30+5), pt);		
 			}
 		}
 	}
 	
-	public enum Parameter {
-		POSE_LEFT_RIGHT,
-		POSE_DOWN_UP,
-		EXP_SURPRISE_BORING,
-		MOUTH_OPEN_CLOSE,
-		FACE_FAT_THIN
+	public int getFitParameter(Parameter param) {		
+		return (int)((mCurrentParams.get(param.mValue+4) * 50)/mModel.shapeModel.mEigenConstraints.get(param.mValue)) + 50;
 	}
+	
+	public float[] getFitShape(Organ organ) {
+		float[] result = new float[2*mModel.pathModel.paths[organ.mValue].length];
+		
+		for (int i=0; i<result.length/2; i++) {
+			result[i*2] = (float)(mCurrentPositions.get(mModel.pathModel.paths[organ.mValue][i] * 2) / mScaleFactor);
+			result[i*2+1] = (float)(mCurrentPositions.get(mModel.pathModel.paths[organ.mValue][i] * 2 + 1) / mScaleFactor);
+		};
+		
+		return result;
+	}
+	
+	public enum Parameter {
+		POSE_LEFT_RIGHT(0),
+		POSE_DOWN_UP(1),
+		EXPRESSION_SURPRISE_BORING(2),
+		MOUTH_OPEN_CLOSE(3),
+		FACE_FAT_THIN(4),
+		MOUTH_SMALL_SHEEPISH(5),
+		MOUTH_CLOSE_OPEN(6),
+		POSE_RIGHT_LEFT_EXT(7),
+		POSE_UP_DOWN_EXT(8),
+		EYE_SMALL_BIG(9),
+		EYE_UP_RIGHT_LEFT(10),
+		EYE_LEFT_RIGHT(11),
+		EYE_BROW_LONG_SHORT(12),
+		EYE_UP_LEFT_RIGHT_EXT(13),
+		EXP_SAD_SMILE(14),
+		FACE_THIN_FAT_EXT(15),
+		POSE_LEFT_RIGHT_EXT(16),
+		EYE_BROW_CENTER_BIG_SMALL(17),
+		FACE_CONTOUR_HIGHT_LOW(18),
+		NOSE_LEFT_RIGHT(19);
+		
+		private final int mValue;
+		
+		private Parameter(int value) {
+			mValue = value;
+		}
+		
+		public static Parameter fromInteger(int value){
+			switch(value){
+			case 0:
+				return POSE_LEFT_RIGHT;
+			case 1:
+				return POSE_DOWN_UP;
+			case 2:
+				return EXPRESSION_SURPRISE_BORING;
+			case 3:
+				return MOUTH_OPEN_CLOSE;
+			case 4:
+				return FACE_FAT_THIN;
+			case 5:
+				return MOUTH_SMALL_SHEEPISH;
+			case 6:
+				return MOUTH_CLOSE_OPEN;
+			case 7:
+				return POSE_RIGHT_LEFT_EXT;
+			case 8:
+				return POSE_UP_DOWN_EXT;
+			case 9:
+				return EYE_SMALL_BIG;
+			case 10:
+				return EYE_UP_RIGHT_LEFT;
+			case 11:
+				return EYE_LEFT_RIGHT;
+			case 12:
+				return EYE_BROW_LONG_SHORT;
+			case 13:
+				return EYE_UP_LEFT_RIGHT_EXT;
+			case 14:
+				return EXP_SAD_SMILE;
+			case 15:
+				return FACE_THIN_FAT_EXT;
+			case 16:
+				return POSE_LEFT_RIGHT_EXT;
+			case 17:
+				return EYE_BROW_CENTER_BIG_SMALL;
+			case 18:
+				return FACE_CONTOUR_HIGHT_LOW;
+			case 19:
+				return NOSE_LEFT_RIGHT;
+			default:
+				return null;
+			}
+		}
+		
+		public static int maxInteger(){
+			return 19;
+		}
+		
+		public String desciption() {
+			return this.toString().replaceAll("_", " ").toLowerCase();
+		}
+	};
+	
+	public enum Organ {
+		FACE(0),
+		RIGHT_EYEBROW(1),
+		LEFT_EYEBROW(2),
+		RIGHT_EYE(3),
+		LEFT_EYE(4),
+		NOSE_FLOOR(5),
+		NOSE_EDGE(6),
+		LIPS(7),
+		LEFT_EYEBALL(8),
+		RIGHT_EYEBALL(9);
+		
+		private final int mValue;
+		
+		private Organ(int value) {
+			mValue = value;
+		}		
+		
+		public static Organ fromInteger(int value){
+			switch(value) {
+			case 0:
+				return FACE;
+			case 1:
+				return RIGHT_EYEBROW;
+			case 2:
+				return LEFT_EYEBROW;
+			case 3:
+				return RIGHT_EYE;
+			case 4:
+				return LEFT_EYE;
+			case 5:
+				return NOSE_FLOOR;
+			case 6:
+				return NOSE_EDGE;
+			case 7:
+				return LIPS;
+			case 8:
+				return LEFT_EYEBALL;
+			case 9:
+				return RIGHT_EYEBALL;
+			default:
+				return null;
+			}
+		}
+		
+		
+		public static int maxInteger(){
+			return 9;
+		}
+		
+		public String desciption() {
+			return this.toString().replaceAll("_", " ").toLowerCase();
+		}
+	};
 	
 	public enum Algorithm {
 		DEFAULT,
@@ -809,16 +932,16 @@ public class FaceAlignProc implements Plotable{
 	
 	private Filter2D mFilter;
 	
-	//For test / plotting
-	private boolean test_PlotContour = true;
-	private boolean test_PlotPts = false;
+	//For test 
+	private boolean test_PlotContour = false;
+	private boolean test_PlotPts = true;
 	
-	private boolean test_PlotOriginal = true;
+	private boolean test_PlotOriginal = false;
 	
 	private boolean test_PlotParams = true;
 	
 	private boolean test_PlotPatch = false;
 	private boolean test_PlotResponse = false;
-	//For test / plotting
+	//For test
 }
 
