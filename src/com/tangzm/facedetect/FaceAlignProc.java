@@ -9,6 +9,8 @@ import android.graphics.Paint;
 import android.graphics.PointF;
 import android.media.FaceDetector;
 import android.media.FaceDetector.Face;
+import android.os.Handler;
+import android.os.Message;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
 import android.renderscript.RenderScript;
@@ -17,7 +19,6 @@ import android.util.Log;
 
 import com.tangzm.facedetect.Filter2D.ResponseType;
 import com.tangzm.facedetect.QMatrix.RepMode;
-import com.tangzm.facedetect.ScriptC_im2float;
 
 
 public class FaceAlignProc{
@@ -26,10 +27,10 @@ public class FaceAlignProc{
 		void finish(boolean status);
 	}
 	
-	public void init(Context ctx, FaceModel model){
+	public void init(Context ctx, int resId){
         QMatrix.init(ctx);
 
-		mModel = model;
+		mModel = new FaceModel(ctx, resId);
 		
         mFilter = new Filter2D(
         		ctx, 
@@ -96,18 +97,35 @@ public class FaceAlignProc{
 			mRunning = false;
 		}
 		else {
+			Handler handler = new Handler(new Handler.Callback() {
+				@Override
+				public boolean handleMessage(Message msg) {
+					// TODO Auto-generated method stub
+					if (1 == msg.arg1){
+						cb.finish(true);
+					}
+					else {
+						cb.finish(false);
+					}
+					return false;
+				}
+			});
+			
+			final Message msg = handler.obtainMessage();
+			msg.arg1 = 1;
+			
 			new Thread(new Runnable(){
 				public void run() {
 					try {
 						doSearchImage(ctx, image, type);
 					}
 					catch (Exception e){
-						cb.finish(false);
+						msg.arg1 = 0;
+					}
+					finally {
+						msg.sendToTarget();
 						mRunning = false;
 					}
-					
-					cb.finish(true);
-					mRunning = false;
 				}
 			}).start();
 		}
@@ -974,7 +992,7 @@ public class FaceAlignProc{
 	
 	private boolean test_PlotOriginal = false;
 	
-	private boolean test_PlotParams = true;
+	private boolean test_PlotParams = false;
 	
 	private boolean test_PlotPatch = false;
 	private boolean test_PlotResponse = false;

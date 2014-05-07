@@ -8,7 +8,7 @@ import android.widget.ImageView;
 
 
 
-public class FaceView extends ImageView{
+public class PlotView extends ImageView{
 	interface Plotable {
 		void plot(Canvas canvas);
 	}
@@ -16,7 +16,7 @@ public class FaceView extends ImageView{
 	private Paint currentPaint;
 	private Plotable p;
 
-	public FaceView(Context context, AttributeSet attrs) {
+	public PlotView(Context context, AttributeSet attrs) {
 		super(context, attrs);
 		
 		currentPaint = new Paint();	

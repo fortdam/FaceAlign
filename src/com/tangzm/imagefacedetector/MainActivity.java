@@ -13,23 +13,19 @@ import android.view.View;
 import android.view.View.OnClickListener;
 
 import com.tangzm.facedetect.FaceAlignProc;
-import com.tangzm.facedetect.FaceAlignProc.Algorithm;
-import com.tangzm.facedetect.FaceModel;
-import com.tangzm.facedetect.FuncTracer;
 
 public class MainActivity extends Activity implements OnClickListener{
 
 	private static final String TAG="ImageFaceDetect";
 	private static final int GALLERY_INTENT_ID = 0x1515;
 
-	private FaceModel model = null;
 	private FaceAlignProc proc = null;
-	private FaceView imgFrame = null;
+	private PlotView imgFrame = null;
 	private Bitmap currPic = null;
 	private Context appCntx = null;
 	
 	
-	private class DrawProc implements FaceView.Plotable {
+	private class DrawProc implements PlotView.Plotable {
 		
 		public DrawProc(FaceAlignProc proc) {
 			mProc = proc;
@@ -50,7 +46,7 @@ public class MainActivity extends Activity implements OnClickListener{
 		
 		appCntx = this;
 		
-		imgFrame = (FaceView)findViewById(R.id.FaceImage);
+		imgFrame = (PlotView)findViewById(R.id.FaceImage);
 		imgFrame.setClickable(true);
 		imgFrame.setOnClickListener(this);
 	}
@@ -58,7 +54,6 @@ public class MainActivity extends Activity implements OnClickListener{
 	@Override
 	protected void onResume(){
 		super.onResume();
-		model = new FaceModel(appCntx, R.raw.model);
 	}
 
 	@Override
@@ -86,16 +81,15 @@ public class MainActivity extends Activity implements OnClickListener{
 			catch(Exception e){
 				e.printStackTrace();
 			}
-			imgFrame.setImageBitmap(currPic);			
+			//imgFrame.setImageBitmap(currPic);			
 
 			try {
-				FuncTracer.startProc("Fit");
 				if (null == proc) {
 					proc = new FaceAlignProc();
-					proc.init(appCntx, model);
+					proc.init(appCntx, R.raw.model);
 				}
 				
-				proc.searchInImage(appCntx, currPic, Algorithm.ASM, new FaceAlignProc.Callback() {
+				proc.searchInImage(appCntx, currPic, FaceAlignProc.Algorithm.ASM, new FaceAlignProc.Callback() {
 					public void finish(boolean status) {
 						if (true == status){
 							imgFrame.addPlot(new DrawProc(proc));
@@ -103,11 +97,9 @@ public class MainActivity extends Activity implements OnClickListener{
 					}
 				});
 				
-				FuncTracer.endProc("Fit");
 				//imgFrame.addPlot(new DrawProc(proc));
 			}
 			catch(Exception e){
-				FuncTracer.procException(e);
 				e.printStackTrace();
 			}
 			
