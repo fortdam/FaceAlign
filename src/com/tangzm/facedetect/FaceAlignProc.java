@@ -22,6 +22,10 @@ import com.tangzm.facedetect.ScriptC_im2float;
 
 public class FaceAlignProc{
 	
+	public interface Callback {
+		void finish(boolean status);
+	}
+	
 	public void init(Context ctx, FaceModel model){
         QMatrix.init(ctx);
 
@@ -39,6 +43,7 @@ public class FaceAlignProc{
         		(mModel.patchModel.sampleHeight+SEARCH_WIN_H-1));
         
         mParamHist = new ArrayList<QMatrix>();
+        mRunning = false;
 	}
 	
 	private float[] makeInitialGuess(Bitmap bmp){
@@ -69,14 +74,43 @@ public class FaceAlignProc{
 		return ret;
 	}
 	
-	public void searchInImage(Context ctx, Bitmap image, Algorithm type) throws Exception{
-		FuncTracer.startFunc();		
-		
+	private void doSearchImage(Context ctx, Bitmap image, Algorithm type) throws Exception {
 		startSearch(ctx, image);
 		
 		do {
 			optimize(type);
-		} while(false == checkConvergence());
+		} while(false == checkConvergence());		
+	}
+	
+	synchronized public void searchInImage(final Context ctx, final Bitmap image, final Algorithm type, final Callback cb) throws Exception{
+		FuncTracer.startFunc();		
+		
+		if (mRunning) {
+			throw new Exception("Another process is running");
+		}
+		
+		mRunning = true;
+		
+		if (null == cb){
+			doSearchImage(ctx, image, type);
+			mRunning = false;
+		}
+		else {
+			new Thread(new Runnable(){
+				public void run() {
+					try {
+						doSearchImage(ctx, image, type);
+					}
+					catch (Exception e){
+						cb.finish(false);
+						mRunning = false;
+					}
+					
+					cb.finish(true);
+					mRunning = false;
+				}
+			}).start();
+		}
 		
 		FuncTracer.endFunc();
 	}
@@ -909,7 +943,7 @@ public class FaceAlignProc{
 	private static final int PARAM_HIST_SIZE = 3;
 	
 	private static final float CONVERGENCE_THRESHOLD = 1.5f;
-	private static final int OPTIMIZATION_LIMIT = 15;
+	private static final int OPTIMIZATION_LIMIT = 3;
 	
 	//Image Data
 	private int mImageW;
@@ -918,6 +952,9 @@ public class FaceAlignProc{
 	private double mScaleFactor;
 	
 	private FaceModel mModel;
+	
+	//For multi-threading
+	private boolean mRunning;
 	
 	//Fit data / result	
 	private QMatrix mOriginalPositions; //The positions for initial guess
@@ -937,7 +974,7 @@ public class FaceAlignProc{
 	
 	private boolean test_PlotOriginal = false;
 	
-	private boolean test_PlotParams = false;
+	private boolean test_PlotParams = true;
 	
 	private boolean test_PlotPatch = false;
 	private boolean test_PlotResponse = false;

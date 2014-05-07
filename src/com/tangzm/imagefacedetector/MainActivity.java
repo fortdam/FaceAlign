@@ -6,25 +6,16 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.graphics.Bitmap.Config;
-import android.graphics.PointF;
-import android.media.FaceDetector;
-import android.media.FaceDetector.Face;
 import android.os.Bundle;
-import android.os.Debug;
 import android.provider.MediaStore.Images.Media;
-import android.util.Log;
 import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
 
 import com.tangzm.facedetect.FaceAlignProc;
+import com.tangzm.facedetect.FaceAlignProc.Algorithm;
 import com.tangzm.facedetect.FaceModel;
 import com.tangzm.facedetect.FuncTracer;
-import com.tangzm.facedetect.FaceAlignProc.Algorithm;
-import com.tangzm.facedetect.FaceAlignProc.Organ;
-import com.tangzm.facedetect.FaceAlignProc.Parameter;
 
 public class MainActivity extends Activity implements OnClickListener{
 
@@ -104,10 +95,16 @@ public class MainActivity extends Activity implements OnClickListener{
 					proc.init(appCntx, model);
 				}
 				
-				proc.searchInImage(appCntx, currPic, Algorithm.ASM);
+				proc.searchInImage(appCntx, currPic, Algorithm.ASM, new FaceAlignProc.Callback() {
+					public void finish(boolean status) {
+						if (true == status){
+							imgFrame.addPlot(new DrawProc(proc));
+						}
+					}
+				});
 				
 				FuncTracer.endProc("Fit");
-				imgFrame.addPlot(new DrawProc(proc));
+				//imgFrame.addPlot(new DrawProc(proc));
 			}
 			catch(Exception e){
 				FuncTracer.procException(e);
