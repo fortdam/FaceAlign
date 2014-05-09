@@ -80,7 +80,7 @@ public class FaceAlignProc{
 		
 		do {
 			optimize(type);
-		} while(false == checkConvergence());		
+		} while(false == checkConvergence(type));		
 	}
 	
 	synchronized public void searchInImage(final Context ctx, final Bitmap image, final Algorithm type, final Callback cb) throws Exception{
@@ -564,8 +564,12 @@ public class FaceAlignProc{
 		FuncTracer.endFunc();
 	}
 	
-	private boolean checkConvergence() {
-		if (mOptCount > OPTIMIZATION_LIMIT) {
+	private boolean checkConvergence(Algorithm type) {
+		
+		if (Algorithm.QUICK==type && mOptCount>=QUICK_OPTIMIZATION_LIMIT){
+			return true;
+		}
+	    else if (mOptCount >= OPTIMIZATION_LIMIT) {
 			return true;
 		}
 		
@@ -659,9 +663,9 @@ public class FaceAlignProc{
 		FuncTracer.endFunc();
 		return ret;
 	}
-	
-	
-	public void drawTestInfo(Canvas canvas){		
+		
+	public void drawTestInfo(Canvas canvas, float scale, float translateX, float translateY){		
+		FuncTracer.startFunc();
 		ShapeModel s = mModel.shapeModel;
 		PathModel path = mModel.pathModel;
 		
@@ -687,7 +691,13 @@ public class FaceAlignProc{
 						double right = (centX + k + offsetX + 1)/mScaleFactor;
 						double bottom = (centY + j + offsetY + 1)/mScaleFactor;
 								
-						pt.setARGB(0xff, color, color, color);
+						left = left*scale+translateX;
+						top = top*scale+translateY;
+						right = right*scale+translateX;
+						bottom = bottom*scale+translateY;
+						
+						pt.setARGB(0xFF, color, color, color);
+						
 						canvas.drawRect((float)left, (float)top, (float)right, (float)bottom, pt);
 					}
 				}
@@ -712,8 +722,14 @@ public class FaceAlignProc{
 						double top = (centY + j + offsetY)/mScaleFactor;
 						double right = (centX + k + offsetX + 1)/mScaleFactor;
 						double bottom = (centY + j + offsetY + 1)/mScaleFactor;
+												
+						left = left*scale+translateX;
+						top = top*scale+translateY;
+						right = right*scale+translateX;
+						bottom = bottom*scale+translateY;
 						
 						pt.setARGB(0xff, color, color, color);
+						
 						canvas.drawRect((float)left, (float)top, (float)right, (float)bottom, pt);
 					}
 				}
@@ -729,24 +745,35 @@ public class FaceAlignProc{
 					pt.setColor(0xFFFF0000);
 
 					for (int j=1; j<path.paths[i].length; j++){
-						double startX = mOriginalPositions.get(path.paths[i][j-1]*2);
-						double startY = mOriginalPositions.get(path.paths[i][j-1]*2+1);
-						double endX = mOriginalPositions.get(path.paths[i][j]*2);
-						double endY = mOriginalPositions.get(path.paths[i][j]*2+1);
-						canvas.drawLine((float)(startX/mScaleFactor), (float)(startY/mScaleFactor), (float)(endX/mScaleFactor), (float)(endY/mScaleFactor), pt);
+						double startX = mOriginalPositions.get(path.paths[i][j-1]*2) / mScaleFactor;
+						double startY = mOriginalPositions.get(path.paths[i][j-1]*2+1) / mScaleFactor;
+						double endX = mOriginalPositions.get(path.paths[i][j]*2) / mScaleFactor;
+						double endY = mOriginalPositions.get(path.paths[i][j]*2+1) / mScaleFactor;
+						
+						startX = startX*scale+translateX;
+						endX = endX*scale+translateX;
+						startY = startY*scale+translateY;
+						endY = endY*scale+translateY;
+						
+						canvas.drawLine((float)startX, (float)startY, (float)endX, (float)endY, pt);
 					}				
 				}
 				
 				pt.setColor(0xFF00FF00);
 				
 				for (int j=1; j<path.paths[i].length; j++){
-					double startX = mCurrentPositions.get(path.paths[i][j-1]*2);
-					double startY = mCurrentPositions.get(path.paths[i][j-1]*2+1);
-					double endX = mCurrentPositions.get(path.paths[i][j]*2);
-					double endY = mCurrentPositions.get(path.paths[i][j]*2+1);
-					canvas.drawLine((float)(startX/mScaleFactor), (float)(startY/mScaleFactor), (float)(endX/mScaleFactor), (float)(endY/mScaleFactor), pt);
+					double startX = mCurrentPositions.get(path.paths[i][j-1]*2) / mScaleFactor;
+					double startY = mCurrentPositions.get(path.paths[i][j-1]*2+1) / mScaleFactor;
+					double endX = mCurrentPositions.get(path.paths[i][j]*2) / mScaleFactor;
+					double endY = mCurrentPositions.get(path.paths[i][j]*2+1) / mScaleFactor;
+									
+					startX = startX*scale+translateX;
+					endX = endX*scale+translateX;
+					startY = startY*scale+translateY;
+					endY = endY*scale+translateY;
+					
+					canvas.drawLine((float)startX, (float)startY, (float)endX, (float)endY, pt);
 				}
-				
 				
 			}
 		}
@@ -757,18 +784,26 @@ public class FaceAlignProc{
 				pt.setColor(0xFFFF0000);
 
 				for (int i=0; i<mModel.numPts; i++){
-					double centX = mOriginalPositions.get(i*2);
-					double centY = mOriginalPositions.get(i*2+1);
-					canvas.drawText(""+i, (float)(centX/mScaleFactor), (float)(centY/mScaleFactor), pt);
+					double centX = mOriginalPositions.get(i*2) / mScaleFactor;
+					double centY = mOriginalPositions.get(i*2+1) / mScaleFactor;
+					
+					centX = centX*scale+translateX;
+					centY = centY*scale+translateY;
+					
+					canvas.drawText(""+i, (float)centX, (float)centY, pt);
 				}
 			}
 			
 			pt.setColor(0xFF00FF00);
 
 			for (int i=0; i<mModel.numPts; i++){
-				double centX = mCurrentPositions.get(i*2);
-				double centY = mCurrentPositions.get(i*2+1);
-				canvas.drawText(""+i, (float)(centX/mScaleFactor), (float)(centY/mScaleFactor), pt);
+				double centX = mCurrentPositions.get(i*2) / mScaleFactor;
+				double centY = mCurrentPositions.get(i*2+1) / mScaleFactor;
+				
+				centX = centX*scale+translateX;
+				centY = centY*scale+translateY;
+				
+				canvas.drawText(""+i, (float)centX, (float)centY, pt);
 			}
 			
 
@@ -788,6 +823,8 @@ public class FaceAlignProc{
 				canvas.drawText(Parameter.fromInteger(i).desciption()+ ": " + value + "/100", 0, (i+1)*(30+5), pt);		
 			}
 		}
+		
+		FuncTracer.endFunc();
 	}
 	
 	public int getFitParameter(Parameter param) {		
@@ -946,6 +983,7 @@ public class FaceAlignProc{
 	
 	public enum Algorithm {
 		DEFAULT,
+		QUICK,
 		ASM,
 		CQF,
 		KDE,
@@ -961,7 +999,8 @@ public class FaceAlignProc{
 	private static final int PARAM_HIST_SIZE = 3;
 	
 	private static final float CONVERGENCE_THRESHOLD = 1.5f;
-	private static final int OPTIMIZATION_LIMIT = 3;
+	private static final int OPTIMIZATION_LIMIT = 15;
+	private static final int QUICK_OPTIMIZATION_LIMIT = 1;
 	
 	//Image Data
 	private int mImageW;
@@ -992,9 +1031,9 @@ public class FaceAlignProc{
 	
 	private boolean test_PlotOriginal = false;
 	
-	private boolean test_PlotParams = false;
+	private boolean test_PlotParams = true;
 	
-	private boolean test_PlotPatch = false;
+	private boolean test_PlotPatch = true;
 	private boolean test_PlotResponse = false;
 	//For test
 }
