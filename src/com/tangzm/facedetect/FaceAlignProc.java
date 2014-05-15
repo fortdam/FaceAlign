@@ -1,6 +1,8 @@
 package com.tangzm.facedetect;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.zip.DataFormatException;
 
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -9,6 +11,7 @@ import android.graphics.Paint;
 import android.graphics.PointF;
 import android.media.FaceDetector;
 import android.media.FaceDetector.Face;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.renderscript.Allocation;
@@ -20,11 +23,38 @@ import android.util.Log;
 import com.tangzm.facedetect.Filter2D.ResponseType;
 import com.tangzm.facedetect.QMatrix.RepMode;
 
+class NoFaceException extends Exception {
+	public NoFaceException(){
+		super("No face detected in image");
+	}
+}
+
+class ModelUnloadedException extends Exception {
+	public ModelUnloadedException() {
+		super("Model data is not loaded");
+	}
+}
+
+class MultipleSearchException extends Exception {
+	public MultipleSearchException() {
+		super("One instance does not support multiple search at same time");
+	}
+}
+
+class NotInitializedException extends Exception {
+	public NotInitializedException() {
+		super("The initial-fitting is not performed before optimization");
+	}
+}
 
 public class FaceAlignProc{
 	
 	public interface Callback {
 		void finish(boolean status);
+	}
+	
+	public interface CallbackWithEyePts {
+		void finish (float[] eyePts);
 	}
 	
 	public void init(Context ctx, int resId){
@@ -47,6 +77,8 @@ public class FaceAlignProc{
         mRunning = false;
 	}
 	
+
+	
 	private float[] makeInitialGuess(Bitmap bmp){
 		FuncTracer.startFunc();
 		
@@ -57,7 +89,13 @@ public class FaceAlignProc{
 		int width = bmp.getWidth()/scaleFactor;
 		int height = bmp.getHeight()/scaleFactor;
 		Bitmap scaledBmp = bmp.createScaledBitmap(bmp, width, height, false);
-		Bitmap processBmp = scaledBmp.copy(Bitmap.Config.RGB_565, false);
+		Bitmap processBmp;
+		if (scaledBmp.getConfig() != Bitmap.Config.RGB_565) {
+			processBmp = scaledBmp.copy(Bitmap.Config.RGB_565, false);			
+		}
+		else {
+			processBmp = scaledBmp;
+		}
 		FaceDetector detector = new FaceDetector(width, height, 1);
 		num = detector.findFaces(processBmp, faces);
 		
@@ -75,19 +113,102 @@ public class FaceAlignProc{
 		return ret;
 	}
 	
-	private void doSearchImage(Context ctx, Bitmap image, Algorithm type) throws Exception {
-		startSearch(ctx, image);
-		
+	
+	private void doOptimize(Algorithm type) throws Exception{
 		do {
 			optimize(type);
-		} while(false == checkConvergence(type));		
+		} while(false == checkConvergence(type));	
+	}
+	
+	private void doSearchImage(Context ctx, Bitmap image, Algorithm type) throws Exception {
+		float[] eyePositions = makeInitialGuess(image);
+		
+		if (null == eyePositions) {
+			throw new NoFaceException();
+		}
+		
+		initializeParameters(eyePositions[0], eyePositions[1], eyePositions[2], eyePositions[3]);
+		setCurrentBitmap(ctx, image);
+		doOptimize(type);
+	}
+	
+	private void doSearchImage(Context ctx, Bitmap image, Algorithm type, float leftEyeX, float leftEyeY, float rightEyeX, float rightEyeY) throws Exception {
+		initializeParameters(leftEyeX, leftEyeY, rightEyeX, rightEyeY);
+		setCurrentBitmap(ctx, image);
+		doOptimize(type);	
+	}
+	
+	private void doOptimizeImage(Context ctx, Bitmap image, Algorithm type) throws Exception{
+		if (null == mModel){
+			throw new ModelUnloadedException();
+		}
+		
+		clearFitHistory();
+		setCurrentBitmap(ctx, image);
+		doOptimize(type);
+	}
+	
+	synchronized public float[] searchEyesInImage(final Bitmap image, final CallbackWithEyePts cb) throws Exception {
+		if (mRunning) {
+			throw new MultipleSearchException();
+		}
+		
+		mRunning = true;
+		
+		if (null == cb){
+			float[] eyePositions = makeInitialGuess(image);;
+			mRunning = false;
+			return eyePositions;
+		}
+		else {
+			Handler handler = new Handler(new Handler.Callback() {
+				@Override
+				public boolean handleMessage(Message msg) {
+					Bundle data = msg.getData();
+					if (null == data){
+						cb.finish(null);
+					}
+					else {
+						cb.finish(data.getFloatArray("value"));
+					}
+					return false;
+				}
+			});
+			
+			final Message msg = handler.obtainMessage();
+			msg.arg1 = 1;
+			
+			new Thread(new Runnable(){
+				public void run() {
+					try {
+						float[] ret = makeInitialGuess(image);
+						if (null != ret){
+							Bundle data = new Bundle();
+							data.putFloatArray("value", ret);
+							msg.setData(data);
+						}
+						else {
+							msg.setData(null);
+						}
+					}
+					catch (Exception e){
+						msg.setData(null);
+					}
+					finally {
+						mRunning = false;
+						msg.sendToTarget();
+					}
+				}
+			}).start();	
+			return null;
+		}
 	}
 	
 	synchronized public void searchInImage(final Context ctx, final Bitmap image, final Algorithm type, final Callback cb) throws Exception{
 		FuncTracer.startFunc();		
 		
 		if (mRunning) {
-			throw new Exception("Another process is running");
+			throw new MultipleSearchException();
 		}
 		
 		mRunning = true;
@@ -120,11 +241,12 @@ public class FaceAlignProc{
 						doSearchImage(ctx, image, type);
 					}
 					catch (Exception e){
+						e.printStackTrace();
 						msg.arg1 = 0;
 					}
 					finally {
-						msg.sendToTarget();
 						mRunning = false;
+						msg.sendToTarget();
 					}
 				}
 			}).start();
@@ -133,9 +255,111 @@ public class FaceAlignProc{
 		FuncTracer.endFunc();
 	}
 	
-	private void startSearch(Context ctx, Bitmap image) throws Exception{		
+	synchronized public void searchInImage(final Context ctx, final Bitmap image, final Algorithm type, final Callback cb, final float leftEyeX, final float leftEyeY, final float rightEyeX, final float rightEyeY) throws Exception{
+		FuncTracer.startFunc();		
+		
+		if (mRunning) {
+			throw new MultipleSearchException();
+		}
+		
+		mRunning = true;
+		
+		if (null == cb){
+			doSearchImage(ctx, image, type, leftEyeX, leftEyeY, rightEyeX, rightEyeY);
+			mRunning = false;
+		}
+		else {
+			Handler handler = new Handler(new Handler.Callback() {
+				@Override
+				public boolean handleMessage(Message msg) {
+					// TODO Auto-generated method stub
+					if (1 == msg.arg1){
+						cb.finish(true);
+					}
+					else {
+						cb.finish(false);
+					}
+					return false;
+				}
+			});
+			
+			final Message msg = handler.obtainMessage();
+			msg.arg1 = 1;
+			
+			new Thread(new Runnable(){
+				public void run() {
+					try {
+						doSearchImage(ctx, image, type, leftEyeX, leftEyeY, rightEyeX, rightEyeY);
+					}
+					catch (Exception e){
+						e.printStackTrace();
+						msg.arg1 = 0;
+					}
+					finally {
+						mRunning = false;
+						msg.sendToTarget();
+					}
+				}
+			}).start();
+		}
+		
+		FuncTracer.endFunc();
+	}
+	
+	synchronized public void optimizeInImage(final Context ctx, final Bitmap image, final Algorithm type, final Callback cb) throws Exception{
+		FuncTracer.startFunc();		
+				
+		if (mRunning) {
+			throw new MultipleSearchException();
+		}
+		
+		mRunning = true;
+		
+		if (null == cb){
+			doOptimizeImage(ctx, image, type);
+			mRunning = false;
+		}
+		else {
+			Handler handler = new Handler(new Handler.Callback() {
+				@Override
+				public boolean handleMessage(Message msg) {
+					// TODO Auto-generated method stub
+					if (1 == msg.arg1){
+						cb.finish(true);
+					}
+					else {
+						cb.finish(false);
+					}
+					return false;
+				}
+			});
+			
+			final Message msg = handler.obtainMessage();
+			msg.arg1 = 1;
+			
+			new Thread(new Runnable(){
+				public void run() {
+					try {
+						doOptimizeImage(ctx, image, type);
+					}
+					catch (Exception e){
+						e.printStackTrace();
+						msg.arg1 = 0;
+					}
+					finally {
+						mRunning = false;
+						msg.sendToTarget();
+					}
+				}
+			}).start();
+		}
+		
+		FuncTracer.endFunc();
+	}
+	
+	private void initializeParameters(float leftEyeX, float leftEyeY, float rightEyeX, float rightEyeY) throws Exception {
 		if (null == mModel){
-			throw new Exception("Not initialized");
+			throw new ModelUnloadedException();
 		}
 		
 		mOriginalPositions = null;
@@ -144,17 +368,6 @@ public class FaceAlignProc{
 		mCurrentParams = null;	
 		mParamHist.clear();
 		mOptCount = 0;
-		
-		float[] eyePositions = makeInitialGuess(image);
-		
-		if (null == eyePositions) {
-			throw new Exception("Can not find face");
-		}
-		
-		float leftX = eyePositions[0];
-		float leftY = eyePositions[1];
-		float rightX = eyePositions[2];
-		float rightY = eyePositions[3];
 				
 		int leftEyeIndex = mModel.pathModel.paths[mModel.pathModel.paths.length-2][0];
 		int rightEyeIndex = mModel.pathModel.paths[mModel.pathModel.paths.length-1][0];
@@ -165,48 +378,83 @@ public class FaceAlignProc{
         double meanRightY = mModel.shapeModel.mMeanShape.get(rightEyeIndex*2+1);
 		
 		double meanAngle = Math.atan((meanRightY-meanLeftY)/(meanRightX-meanLeftX));
-		double currAngle = Math.atan((rightY-leftY)/(rightX-leftX));
+		double currAngle = Math.atan((rightEyeY-leftEyeY)/(rightEyeX-leftEyeX));
 		
 		double diffAngle = currAngle - meanAngle;
 		
         double meanDist = Math.hypot(meanRightX-meanLeftX, meanRightY-meanLeftY);
-        double currDist = Math.hypot(rightX-leftX, rightY-leftY);
+        double currDist = Math.hypot(rightEyeX-leftEyeX, rightEyeY-leftEyeY);
         
         double scale = meanDist/currDist;
         mScaleFactor = scale;
-        
-        Bitmap imgProcess = Bitmap.createScaledBitmap(image, (int)(image.getWidth()*scale), (int)(image.getHeight()*scale), true);
-        
-        leftX *= scale;
-        leftY *= scale;
-        rightX *= scale;
-        rightY *= scale;
+                
+        leftEyeX *= scale;
+        leftEyeY *= scale;
+        rightEyeX *= scale;
+        rightEyeY *= scale;
         
 		mCurrentParams = new QMatrix(mModel.numEVectors+4, 1);
 		
 		mCurrentParams.set(0, (float)Math.cos(diffAngle)); //Alpha * cos(theta)
 		mCurrentParams.set(1, (float)Math.sin(diffAngle)); //Alpha * sin(theta)
-		mCurrentParams.set(2, (float)((rightX+leftX)/2-(meanRightX+meanLeftX)/2)); //translate X
-		mCurrentParams.set(3, (float)((rightY+leftY)/2-(meanRightY+meanLeftY)/2));  //translate Y
-				
-        mImageW = imgProcess.getWidth();
-        mImageH = imgProcess.getHeight();
-        
-        //Create the float image
-        RenderScript rs = RenderScript.create(ctx);
-        ScriptC_im2float script = new ScriptC_im2float(rs);
-        Allocation inAlloc = Allocation.createFromBitmap(rs, imgProcess);
-        Type.Builder tb = new Type.Builder(rs, Element.U8(rs));
-        tb.setX(mImageW).setY(mImageH);
-        mImgGrayScaled = new byte[mImageW*mImageH];
-        Allocation outAlloc = Allocation.createTyped(rs, tb.create());
-        script.forEach_root(inAlloc, outAlloc);
-        outAlloc.copyTo(mImgGrayScaled);		
+		mCurrentParams.set(2, (float)((rightEyeX+leftEyeX)/2-(meanRightX+meanLeftX)/2)); //translate X
+		mCurrentParams.set(3, (float)((rightEyeY+leftEyeY)/2-(meanRightY+meanLeftY)/2));  //translate Y
         
         mCurrentPositions = getCurrentShape();
         mOriginalPositions = new QMatrix(mCurrentPositions, true);
         mParamHist.add(new QMatrix(mCurrentParams, true));
 	}
+	
+	private void setCurrentBitmap(Context ctx, Bitmap image) throws Exception
+	{	
+        Bitmap imgProcess = Bitmap.createScaledBitmap(image, (int)(image.getWidth()*mScaleFactor), (int)(image.getHeight()*mScaleFactor), true);
+
+        mImageW = imgProcess.getWidth();
+        mImageH = imgProcess.getHeight();
+        
+        //Create the float image
+        RenderScript rs = RenderScript.create(ctx);
+        
+        if (imgProcess.getConfig() == Bitmap.Config.ARGB_8888) {
+	        ScriptC_im2float script = new ScriptC_im2float(rs);
+	        Allocation inAlloc = Allocation.createFromBitmap(rs, imgProcess);
+	        Type.Builder tb = new Type.Builder(rs, Element.U8(rs));
+	        tb.setX(mImageW).setY(mImageH);
+	        mImgGrayScaled = new byte[mImageW*mImageH];
+	        Allocation outAlloc = Allocation.createTyped(rs, tb.create());
+	        script.forEach_root(inAlloc, outAlloc);
+	        outAlloc.copyTo(mImgGrayScaled);		
+        }
+        else if (imgProcess.getConfig() == Bitmap.Config.RGB_565) {
+	        ScriptC_im2float_565 script = new ScriptC_im2float_565(rs);
+	        Type.Builder tbIn = new Type.Builder(rs, Element.U8_2(rs));
+	        Type.Builder tbOut = new Type.Builder(rs, Element.U8(rs));
+	        tbIn.setX(mImageW).setY(mImageH);
+	        tbOut.setX(mImageW).setY(mImageH);
+	        byte[] mOriginalBytes = new byte[mImageW*mImageH*2];
+	        mImgGrayScaled = new byte[mImageW*mImageH];
+	        Allocation inAlloc = Allocation.createTyped(rs, tbIn.create());
+	        Allocation outAlloc = Allocation.createTyped(rs, tbOut.create());
+	        ByteBuffer buffer = ByteBuffer.wrap(mOriginalBytes);
+	        imgProcess.copyPixelsToBuffer(buffer);
+	        inAlloc.copyFrom(mOriginalBytes);
+	        script.forEach_root(inAlloc, outAlloc);
+	        outAlloc.copyTo(mImgGrayScaled);
+        }
+        else {
+	        throw new DataFormatException("Only support Bitmap in ARGB_8880");     	
+        }
+        
+
+	}
+	
+	private void clearFitHistory() {
+		mParamHist.clear();
+		mOptCount = 0;
+		
+        mParamHist.add(new QMatrix(mCurrentParams, true));
+	}
+	
 	
 	private QMatrix getScaleRotateM(final QMatrix params){
 		return getScaleRotateM(params, 1, 0);
@@ -566,7 +814,9 @@ public class FaceAlignProc{
 	
 	private boolean checkConvergence(Algorithm type) {
 		
-		if (Algorithm.QUICK==type && mOptCount>=QUICK_OPTIMIZATION_LIMIT){
+		if ((Algorithm.ASM_QUICK==type && mOptCount>=ASM_QUICK_OPTIMIZATION_LIMIT) || 
+				(Algorithm.CQF_QUICK==type && mOptCount>=CQF_QUICK_OPTIMIZATION_LIMIT) ||
+				(Algorithm.KDE_QUICK==type && mOptCount>=KDE_QUICK_OPTIMIZATION_LIMIT)){
 			return true;
 		}
 	    else if (mOptCount >= OPTIMIZATION_LIMIT) {
@@ -593,22 +843,26 @@ public class FaceAlignProc{
 	
 	private void optimize(Algorithm type) throws Exception{
 		FuncTracer.startFunc();
+		Log.i(TAG, "test opt");
 		
 		//Get Filter response
 		mFilter.setPatches(cropPatches());
 		
 		switch(type){	
 		case CQF:
+		case CQF_QUICK:
 			mFilter.process(ResponseType.REG_NORMALIZED);
 			searchConvQuadFit(mFilter.gerResponseImages());
 			break;
 			
 		case KDE:
+		case KDE_QUICK:
 			mFilter.process(ResponseType.REGULARIZED);
 			searchMeanShift(mFilter.gerResponseImages());
 			break;
 			
 		case ASM:
+		case ASM_QUICK:
 		default:
 			mFilter.process(ResponseType.RAW);
 			searchPeak(mFilter.gerResponseImages());
@@ -669,7 +923,7 @@ public class FaceAlignProc{
 		ShapeModel s = mModel.shapeModel;
 		PathModel path = mModel.pathModel;
 		
-
+		Log.v(TAG, "DrawTestInfo: mScaleFactor="+mScaleFactor+" scale="+scale+" translateX="+translateX+ " translateY="+translateY); 
 		if (test_PlotPatch){
 			Paint pt = new Paint();
 			byte[] patches = cropPatches();
@@ -755,6 +1009,7 @@ public class FaceAlignProc{
 						startY = startY*scale+translateY;
 						endY = endY*scale+translateY;
 						
+						
 						canvas.drawLine((float)startX, (float)startY, (float)endX, (float)endY, pt);
 					}				
 				}
@@ -773,6 +1028,8 @@ public class FaceAlignProc{
 					endY = endY*scale+translateY;
 					
 					canvas.drawLine((float)startX, (float)startY, (float)endX, (float)endY, pt);
+				
+					Log.v(TAG, "Print contour:  ("+ startX + "," + startY + ") to (" +endX+","+endY+")" );
 				}
 				
 			}
@@ -983,13 +1240,16 @@ public class FaceAlignProc{
 	
 	public enum Algorithm {
 		DEFAULT,
-		QUICK,
-		ASM,
-		CQF,
-		KDE,
+		ASM, //Active Shape Model.
+		ASM_QUICK, //A simple version of ASM, it only runs $(ASM_QUICK_OPTIMIZATION_LIMIT) time of ASM optimization.
+		CQF, //Convex Quadratic Function. Actually we use gaussian distribution to similarize quadratic function
+		CQF_QUICK, //A simple version of CQF, it only runs $(CQF_QUICK_OPTIMIZATION_LIMIT) limit of CQF optimization.
+		KDE, //Kernel Density Estimation. Also called "mean-shift"
+		KDE_QUICK, //A simple version of KDE, it only runs $(KDE_QUICK_OPTIMIZATION_LIMIT) limit of KDE optimization.
 	};
 	
 	private static final String TAG = "FaceAlignProc";
+
 
 	private static final int INITIAL_FIT_MIN_DIM = 100;
 
@@ -999,8 +1259,11 @@ public class FaceAlignProc{
 	private static final int PARAM_HIST_SIZE = 3;
 	
 	private static final float CONVERGENCE_THRESHOLD = 1.5f;
+	
 	private static final int OPTIMIZATION_LIMIT = 15;
-	private static final int QUICK_OPTIMIZATION_LIMIT = 1;
+	private static final int ASM_QUICK_OPTIMIZATION_LIMIT = 1;
+	private static final int CQF_QUICK_OPTIMIZATION_LIMIT = 1;
+	private static final int KDE_QUICK_OPTIMIZATION_LIMIT = 1;
 	
 	//Image Data
 	private int mImageW;
@@ -1031,9 +1294,9 @@ public class FaceAlignProc{
 	
 	private boolean test_PlotOriginal = false;
 	
-	private boolean test_PlotParams = true;
+	private boolean test_PlotParams = false;
 	
-	private boolean test_PlotPatch = true;
+	private boolean test_PlotPatch = false;
 	private boolean test_PlotResponse = false;
 	//For test
 }

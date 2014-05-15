@@ -3,7 +3,11 @@
     package="com.tangzm.imagefacedetector"
     android:versionCode="1"
     android:versionName="1.0" >
+
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.CAMERA" />
+     <uses-feature android:name="android.hardware.camera.autofocus" />
+    
     <uses-sdk
         android:minSdkVersion="17"
         android:targetSdkVersion="17" />
@@ -21,6 +25,14 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+        </activity>
+        <activity
+            android:name="com.tangzm.imagefacedetector.ImageActivity"
+            android:label="@string/title_activity_image" >
+        </activity>
+        <activity
+            android:name="com.tangzm.imagefacedetector.CameraActivity"
+            android:label="@string/title_activity_camera" >
         </activity>
     </application>
 

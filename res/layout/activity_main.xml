@@ -4,16 +4,24 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity" >
 
-    <com.tangzm.imagefacedetector.FaceView
-        android:id="@+id/FaceImage"
+    <Button
+        android:id="@+id/ImageButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:scaleType="matrix"
-        android:layout_alignParentBottom="true"
         android:layout_alignParentLeft="true"
-        android:layout_alignParentRight="true"
         android:layout_alignParentTop="true"
-        android:src="@drawable/ic_launcher"
-         />
+        android:layout_marginLeft="77dp"
+        android:layout_marginTop="42dp"
+        android:onClick="onClickImage"
+        android:text="Image" />
+
+    <Button
+        android:id="@+id/CameraButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignLeft="@+id/ImageButton"
+        android:layout_centerVertical="true"
+        android:onClick="onClickCamera"
+        android:text="Camera" />
 
 </RelativeLayout>

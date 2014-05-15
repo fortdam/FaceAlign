@@ -64,10 +64,6 @@ void __attribute__((kernel)) regNorm(uint32_t in) {
 			}
 		} 		
 	}
-	
-
-
-	
 } 
 
 void __attribute__((kernel)) filter(uint32_t in) {

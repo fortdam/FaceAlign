@@ -20,7 +20,7 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
     private Camera mCamera;
     
     private byte[] mPreviewDataBuffer = null;
-    private byte[] mPreviewDataBuffer2 = null;
+    //private byte[] mPreviewDataBuffer2 = null;
     
     private Camera.PreviewCallback mPreviewCallback = null;
     private Camera.FaceDetectionListener mFaceDetectListener = null;
@@ -50,21 +50,26 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
         	mCamera.setParameters(params);
         	      
         	mPreviewDataBuffer = new byte[width*height*ImageFormat.getBitsPerPixel(ImageFormat.RGB_565)/8];
-    		mPreviewDataBuffer2 = new byte[width*height*ImageFormat.getBitsPerPixel(ImageFormat.RGB_565)/8];
+    		//mPreviewDataBuffer2 = new byte[width*height*ImageFormat.getBitsPerPixel(ImageFormat.RGB_565)/8];
         	mCamera.addCallbackBuffer(mPreviewDataBuffer);
-        	mCamera.addCallbackBuffer(mPreviewDataBuffer2);
+        	//mCamera.addCallbackBuffer(mPreviewDataBuffer2);
             
             mCamera.setPreviewDisplay(holder);
+            
+            mCamera.setPreviewCallbackWithBuffer(mPreviewCallback);            
+            //mCamera.setFaceDetectionListener(mFaceDetectListener);
+            
             mCamera.startPreview();         
-            
-            mCamera.setPreviewCallbackWithBuffer(mPreviewCallback);
-            
 
         } catch (IOException e) {
             Log.d(TAG, "Error setting camera preview: " + e.getMessage());
         }
     }
 
+    public void flushBuffers(){
+    	mCamera.addCallbackBuffer(mPreviewDataBuffer);
+    	//mCamera.addCallbackBuffer(mPreviewDataBuffer2);
+    }
     
     public void surfaceDestroyed(SurfaceHolder holder) {
     	mCamera.stopPreview();

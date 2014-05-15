@@ -112,7 +112,7 @@ public class ImageActivity extends Activity {
 	            search(FaceAlignProc.Algorithm.KDE);
 	            return true;	        	
 	        case R.id.menu_fast:
-	            search(FaceAlignProc.Algorithm.QUICK);
+	            search(FaceAlignProc.Algorithm.ASM_QUICK);
 	            return true;	        
 	        case R.id.menu_clean:
 	        	mPlotView.addPlot(null);

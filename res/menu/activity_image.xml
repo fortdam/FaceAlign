@@ -1,0 +1,30 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android" >
+
+    <item
+        android:id="@+id/menu_asm"
+        android:orderInCategory="101"
+        android:showAsAction="never"
+        android:title="@string/menu_asm"/>
+    <item
+        android:id="@+id/menu_cqf"
+        android:orderInCategory="102"
+        android:showAsAction="never"
+        android:title="@string/menu_cqf"/>
+     <item
+        android:id="@+id/menu_kde"
+        android:orderInCategory="103"
+        android:showAsAction="never"
+        android:title="@string/menu_kde"/>
+     <item
+        android:id="@+id/menu_fast"
+        android:orderInCategory="100"
+        android:showAsAction="never"
+        android:title="@string/menu_fast"/>     
+     <item
+        android:id="@+id/menu_clean"
+        android:orderInCategory="110"
+        android:showAsAction="never"
+        android:title="@string/menu_clean"/>  
+     
+
+</menu>

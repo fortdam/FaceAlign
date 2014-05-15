@@ -1,0 +1,24 @@
+<AbsoluteLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".CameraActivity" >
+    
+    <FrameLayout
+	    android:id="@+id/CameraPreview"
+	    android:layout_x="0dp"
+	    android:layout_y="0dp"
+	    android:layout_width="360dp"
+	    android:layout_height="480dp"
+	    android:onClick="click"
+	    />
+    
+    <com.tangzm.imagefacedetector.PlotView
+        android:id="@+id/CameraPlotView"
+        android:layout_x="0dp"
+        android:layout_y="0dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        />    
+
+</AbsoluteLayout>

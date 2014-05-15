@@ -1,0 +1,24 @@
+<AbsoluteLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".ImageActivity" >
+
+    <ImageView
+        android:id="@+id/BaseImageView"
+        android:layout_x="0dp"
+        android:layout_y="0dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitCenter" 
+        />
+    
+    <com.tangzm.imagefacedetector.PlotView
+        android:id="@+id/ImagePlotView"
+        android:layout_x="0dp"
+        android:layout_y="0dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        />
+
+</AbsoluteLayout>

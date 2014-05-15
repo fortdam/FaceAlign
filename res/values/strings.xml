@@ -3,6 +3,13 @@
 
     <string name="app_name">ImageFaceDetector</string>
     <string name="hello_world">Hello world!</string>
-    <string name="menu_settings">Settings</string>
+    <string name="menu_settings">Settings</string>    
+    <string name="menu_fast">FAST</string>  
+    <string name="menu_asm">ASM</string>
+    <string name="menu_cqf">CQF</string>
+    <string name="menu_kde">KDE</string>
+    <string name="menu_clean">Clear it</string>    
+    <string name="title_activity_image">ImageActivity</string>
+    <string name="title_activity_camera">CameraActivity</string>
 
 </resources>
