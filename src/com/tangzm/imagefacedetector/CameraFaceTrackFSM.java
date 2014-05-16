@@ -117,7 +117,7 @@ public class CameraFaceTrackFSM {
 				mHandler = new Handler(new Handler.Callback() {
 					@Override
 					public boolean handleMessage(Message msg) {
-						mStates[mCurrentState].process(Event.SOFT_CHECK_REQUIRED);
+						mStates[mCurrentState].process(Event.CHECK_REQUIRED);
 						return true;
 					}
 				});
@@ -190,5 +190,5 @@ public class CameraFaceTrackFSM {
 		"idle", "hard_check", "hard_fit", "soft_check", "soft_fit"
 	};
 	
-	private static final int SOFT_CHECK_PERIOD = 15000; //in ms
+	private static final int SOFT_CHECK_PERIOD = 3000; //in ms
 }

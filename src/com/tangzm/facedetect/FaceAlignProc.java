@@ -139,13 +139,16 @@ public class FaceAlignProc{
 	}
 	
 	private void doOptimizeImage(Context ctx, Bitmap image, Algorithm type) throws Exception{
+		FuncTracer.startFunc();
 		if (null == mModel){
 			throw new ModelUnloadedException();
 		}
 		
 		clearFitHistory();
+		adjustScaleFactor(); //use last result as current scale hint, it should be more proper than fixed scale factor
 		setCurrentBitmap(ctx, image);
 		doOptimize(type);
+		FuncTracer.endFunc();
 	}
 	
 	synchronized public float[] searchEyesInImage(final Bitmap image, final CallbackWithEyePts cb) throws Exception {
@@ -403,6 +406,20 @@ public class FaceAlignProc{
         mCurrentPositions = getCurrentShape();
         mOriginalPositions = new QMatrix(mCurrentPositions, true);
         mParamHist.add(new QMatrix(mCurrentParams, true));
+	}
+	
+	private void adjustScaleFactor() {
+		//Always normalize the size of processed image, not let it too big or too small
+		float adjustScale = (float)Math.sqrt(Math.pow(mCurrentParams.get(0),2) + Math.pow(mCurrentParams.get(1),2));
+		Log.i(TAG, "adjustScale = "+adjustScale);
+		
+        if (adjustScale >= 2.5 || adjustScale <=0.4) {
+			mScaleFactor /= adjustScale;
+			mCurrentParams.set(0, mCurrentParams.get(0)/adjustScale);
+			mCurrentParams.set(1, mCurrentParams.get(1)/adjustScale);
+			mCurrentParams.set(2, mCurrentParams.get(2)/adjustScale);
+			mCurrentParams.set(3, mCurrentParams.get(3)/adjustScale);
+        }
 	}
 	
 	private void setCurrentBitmap(Context ctx, Bitmap image) throws Exception
@@ -901,8 +918,8 @@ public class FaceAlignProc{
 					int posX =  centerX + shiftW + k;
 					int posY =  centerY + shiftH + j;
 					
-					if (posX<0 || posY<0 || posX>mImageW || posY>mImageH){ //out of image
-						ret[i*patchW*patchH+j*patchW+k] = 100; //set as black 
+					if (posX<0 || posY<0 || posX>=mImageW || posY>=mImageH){ //out of image
+						ret[i*patchW*patchH+j*patchW+k] = 0; //set as black 
 						//Log.i(TAG, "index="+(patchW*patchH+j*patchW+k)+"val="+0);
 					}
 					else {						
