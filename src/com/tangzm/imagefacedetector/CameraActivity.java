@@ -5,6 +5,7 @@ import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.util.Vector;
 
 import android.app.Activity;
 import android.graphics.Bitmap;
@@ -14,7 +15,6 @@ import android.hardware.Camera;
 import android.hardware.Camera.Face;
 import android.os.Bundle;
 import android.os.Environment;
-import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Menu;
 import android.view.View;
@@ -26,7 +26,7 @@ import com.tangzm.facedetect.FaceAlignProc.Algorithm;
 import com.tangzm.imagefacedetector.CameraFaceTrackFSM.Event;
 
 public class CameraActivity extends Activity 
-implements Camera.PreviewCallback, Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
+implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -40,7 +40,8 @@ implements Camera.PreviewCallback, Camera.FaceDetectionListener,  CameraFaceTrac
         mCamera.setDisplayOrientation(90);
 
         // Create our Preview view and set it as the content of our activity.
-        mPreview = new CameraPreview(this, mCamera, this, this);
+        mBufferHandler = new BufferHandler();
+        mPreview = new CameraPreview(this, mCamera, mBufferHandler, this);
                 
         FrameLayout preview = (FrameLayout) findViewById(R.id.CameraPreview);
         preview.addView(mPreview);
@@ -118,7 +119,47 @@ implements Camera.PreviewCallback, Camera.FaceDetectionListener,  CameraFaceTrac
 		return rotateImage;
 	}
 	
-	public void onPreviewFrame(final byte[] data, Camera camera) {
+	class BufferHandler implements Camera.PreviewCallback{
+						
+		private Vector<byte[]> mBuffers = new Vector<byte[]>();
+		
+		public void deliverFrameIfNeeded() {
+			if (false == mProc.isRunning() && mBuffers.size()>0) {
+				
+				final byte[] currData = mBuffers.get(0);
+				
+				processFrame(currData, new Runnable() {
+
+					public void run() {
+						for (int i=0; i<mBuffers.size(); i++) {
+							if (mBuffers.get(i) == currData){
+								mCamera.addCallbackBuffer(mBuffers.remove(i));
+								break;
+							}
+						}
+
+						deliverFrameIfNeeded();
+					}
+					
+				});
+			}
+		}
+		
+
+		@Override
+		public void onPreviewFrame(final byte[] data, Camera camera) {
+			mBuffers.add(data);
+			deliverFrameIfNeeded();		
+		}
+		
+		public void obseleteBuffer() {
+			while(mBuffers.size() > 0) {
+				mCamera.addCallbackBuffer(mBuffers.remove(0));
+			}
+		}
+	};
+	
+	public void processFrame(final byte[] data, final Runnable bufferConsumed) {
 		Log.i(TAG, "frame comes");
 		
 		if (mFSM.STATE_HARD_CHECK == mFSM.getCurrentState() ||
@@ -137,7 +178,7 @@ implements Camera.PreviewCallback, Camera.FaceDetectionListener,  CameraFaceTrac
 							rightEyeY = eyePts[3];
 							mFSM.sendEvent(Event.FACE_DETECTED);
 						}
-						
+						bufferConsumed.run();
 					}
 				});
 			}
@@ -148,7 +189,7 @@ implements Camera.PreviewCallback, Camera.FaceDetectionListener,  CameraFaceTrac
 		else if (mFSM.STATE_HARD_FIT == mFSM.getCurrentState()) {
 			//asm optimize
 			
-			final float plotScale = (float)(mPlotView.getWidth()) / (float)(camera.getParameters().getPreviewSize().height);  //90 degree rotated
+			final float plotScale = (float)(mPlotView.getWidth()) / (float)(mCamera.getParameters().getPreviewSize().height);  //90 degree rotated
 			try {
 				mProc.searchInImage(this.getApplicationContext(), bufferToBitmap(data), Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
 					@Override
@@ -166,6 +207,7 @@ implements Camera.PreviewCallback, Camera.FaceDetectionListener,  CameraFaceTrac
 						}
 						
 						mFSM.sendEvent(Event.FIT_COMPLETE);
+						bufferConsumed.run();
 					}
 				}, leftEyeX, leftEyeY, rightEyeX, rightEyeY);
 			}
@@ -180,7 +222,7 @@ implements Camera.PreviewCallback, Camera.FaceDetectionListener,  CameraFaceTrac
 			
 			
 			
-			final float plotScale = (float)(mPlotView.getWidth()) / (float)(camera.getParameters().getPreviewSize().height); //90 degree rotated
+			final float plotScale = (float)(mPlotView.getWidth()) / (float)(mCamera.getParameters().getPreviewSize().height); //90 degree rotated
 			try {
 				mProc.optimizeInImage(this.getApplicationContext(), bufferToBitmap(data), Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
 					@Override
@@ -199,6 +241,7 @@ implements Camera.PreviewCallback, Camera.FaceDetectionListener,  CameraFaceTrac
 						}
 						
 						mFSM.sendEvent(Event.FIT_COMPLETE);
+						bufferConsumed.run();
 					}
 				});
 			}
@@ -219,7 +262,7 @@ implements Camera.PreviewCallback, Camera.FaceDetectionListener,  CameraFaceTrac
 
 	@Override
 	public void startProc() {
-		mPreview.flushBuffers();
+		mBufferHandler.obseleteBuffer();
 	}
 
 	@Override
@@ -232,6 +275,8 @@ implements Camera.PreviewCallback, Camera.FaceDetectionListener,  CameraFaceTrac
 	private Camera mCamera;
 	private CameraPreview mPreview;
 	private int mCameraID;
+	
+	private BufferHandler mBufferHandler;
 	
 	private CameraFaceTrackFSM mFSM;
 	

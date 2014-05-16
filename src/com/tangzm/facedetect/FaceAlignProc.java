@@ -934,6 +934,10 @@ public class FaceAlignProc{
 		FuncTracer.endFunc();
 		return ret;
 	}
+	
+	public boolean isRunning() {
+		return mRunning;
+	}
 		
 	public void drawTestInfo(Canvas canvas, float scale, float translateX, float translateY){		
 		FuncTracer.startFunc();
