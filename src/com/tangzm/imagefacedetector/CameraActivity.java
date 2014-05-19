@@ -65,12 +65,19 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 	@Override
 	public void onResume() {
 		super.onResume();
+		mCamera.startPreview();
 	}
 	
 	@Override
 	public void onPause() {
+		mCamera.stopPreview();
+		//mCamera.release();
 		super.onPause();
+	}
+	
+	public void onStop() {
 		mCamera.release();
+		super.onStop();
 	}
 	
 	public Camera getCameraInstance(){
@@ -153,8 +160,14 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 		}
 		
 		public void obseleteBuffer() {
-			while(mBuffers.size() > 0) {
-				mCamera.addCallbackBuffer(mBuffers.remove(0));
+			int startIndex = 0;
+			
+			if (mProc.isRunning()) {
+				//buffer 0 is being used now, don't free it now.
+				startIndex += 1;
+			}
+			while(mBuffers.size() > startIndex) {
+				mCamera.addCallbackBuffer(mBuffers.remove(startIndex));
 			}
 		}
 	};

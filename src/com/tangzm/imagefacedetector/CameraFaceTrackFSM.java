@@ -169,6 +169,7 @@ public class CameraFaceTrackFSM {
 	}
 	
 	synchronized public void sendEvent(Event evt){
+		Log.i(TAG, "Event="+evt.toString());
 		mStates[mCurrentState].process(evt);
 	}
 	
@@ -184,11 +185,12 @@ public class CameraFaceTrackFSM {
 	public static final int STATE_SOFT_FIT = 4;
 	public static final int STATE_NUM = 5;
 	
-	private static final String TAG = "CameraFitFSM";
+	private static final String TAG = "CameraFaceTrackFSM";
 	
 	private static final String[] test_state_name = new String[]{
 		"idle", "hard_check", "hard_fit", "soft_check", "soft_fit"
 	};
 	
-	private static final int SOFT_CHECK_PERIOD = 3000; //in ms
+	
+	private static final int SOFT_CHECK_PERIOD = 1500; //in ms
 }

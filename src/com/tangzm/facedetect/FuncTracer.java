@@ -31,7 +31,7 @@ public class FuncTracer {
 	
 	
 	public static void startFunc() {
-		if (BuildConfig.DEBUG && !mException){
+		if (BuildConfig.DEBUG && mEnabled && !mException){
 		    StackTraceElement[] stacktrace = Thread.currentThread().getStackTrace();
 		    StackTraceElement e = stacktrace[3];//coz 0th will be getStackTrace so 1st
 		    String funcName = e.getMethodName();
@@ -48,7 +48,7 @@ public class FuncTracer {
 	}
 	
 	public static void endFunc(){
-		if (BuildConfig.DEBUG && !mException){	
+		if (BuildConfig.DEBUG && mEnabled && !mException){	
 		    Node item = mFuncStack.pop();
 		    
 		    if (STRICT_MODE) {
@@ -72,7 +72,7 @@ public class FuncTracer {
 	}
 	
 	public static void startProc(String token) {
-		if (BuildConfig.DEBUG && !mException){
+		if (BuildConfig.DEBUG && mEnabled && !mException){
 			mFuncStack.push(new Node(token, System.currentTimeMillis()));
 
 			if (!PRECISE_MODE){
@@ -83,7 +83,7 @@ public class FuncTracer {
 	}
 	
 	public static void endProc(String token) {
-		if (BuildConfig.DEBUG && !mException){	
+		if (BuildConfig.DEBUG && mEnabled && !mException){	
 		    Node item = mFuncStack.pop();
 		    
 		    if (STRICT_MODE) {
@@ -104,7 +104,7 @@ public class FuncTracer {
 	public static void procException(Exception e) {
 		mException = true;
 	}
-	
+	private static boolean mEnabled = false;
 	private static boolean mException = false;
 	
 	private static final String TAG = "FuncTracer";
