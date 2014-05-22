@@ -192,5 +192,5 @@ public class CameraFaceTrackFSM {
 	};
 	
 	
-	private static final int SOFT_CHECK_PERIOD = 1500; //in ms
+	private static final int SOFT_CHECK_PERIOD = 3000; //in ms
 }

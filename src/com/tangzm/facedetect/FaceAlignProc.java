@@ -1039,41 +1039,58 @@ public class FaceAlignProc{
 				
 				if (test_PlotOriginal){
 					pt.setColor(0xFFFF0000);
-
+					
+					if (1 == path.paths[i].length){
+						double centX = mCurrentPositions.get(path.paths[i][0]*2) / mScaleFactor;
+						double centY = mCurrentPositions.get(path.paths[i][0]*2+1) / mScaleFactor;
+						centX = centX*scale+translateX;
+						centY = centY*scale+translateY;
+						canvas.drawCircle((float)centX, (float)centY, (float)test_circle_radius, pt);
+					}
+					else {
+						for (int j=1; j<path.paths[i].length; j++){
+							double startX = mOriginalPositions.get(path.paths[i][j-1]*2) / mScaleFactor;
+							double startY = mOriginalPositions.get(path.paths[i][j-1]*2+1) / mScaleFactor;
+							double endX = mOriginalPositions.get(path.paths[i][j]*2) / mScaleFactor;
+							double endY = mOriginalPositions.get(path.paths[i][j]*2+1) / mScaleFactor;
+							
+							startX = startX*scale+translateX;
+							endX = endX*scale+translateX;
+							startY = startY*scale+translateY;
+							endY = endY*scale+translateY;
+							
+							
+							canvas.drawLine((float)startX, (float)startY, (float)endX, (float)endY, pt);
+						}		
+					}
+				}
+				
+				pt.setColor(0xFF00FF00);
+				
+				if (1 == path.paths[i].length){
+					double centX = mCurrentPositions.get(path.paths[i][0]*2) / mScaleFactor;
+					double centY = mCurrentPositions.get(path.paths[i][0]*2+1) / mScaleFactor;
+					centX = centX*scale+translateX;
+					centY = centY*scale+translateY;
+					canvas.drawCircle((float)centX, (float)centY, (float)test_circle_radius, pt);
+				}
+				else {
 					for (int j=1; j<path.paths[i].length; j++){
-						double startX = mOriginalPositions.get(path.paths[i][j-1]*2) / mScaleFactor;
-						double startY = mOriginalPositions.get(path.paths[i][j-1]*2+1) / mScaleFactor;
-						double endX = mOriginalPositions.get(path.paths[i][j]*2) / mScaleFactor;
-						double endY = mOriginalPositions.get(path.paths[i][j]*2+1) / mScaleFactor;
-						
+						double startX = mCurrentPositions.get(path.paths[i][j-1]*2) / mScaleFactor;
+						double startY = mCurrentPositions.get(path.paths[i][j-1]*2+1) / mScaleFactor;
+						double endX = mCurrentPositions.get(path.paths[i][j]*2) / mScaleFactor;
+						double endY = mCurrentPositions.get(path.paths[i][j]*2+1) / mScaleFactor;
+										
 						startX = startX*scale+translateX;
 						endX = endX*scale+translateX;
 						startY = startY*scale+translateY;
 						endY = endY*scale+translateY;
 						
-						
 						canvas.drawLine((float)startX, (float)startY, (float)endX, (float)endY, pt);
-					}				
-				}
-				
-				pt.setColor(0xFF00FF00);
-				
-				for (int j=1; j<path.paths[i].length; j++){
-					double startX = mCurrentPositions.get(path.paths[i][j-1]*2) / mScaleFactor;
-					double startY = mCurrentPositions.get(path.paths[i][j-1]*2+1) / mScaleFactor;
-					double endX = mCurrentPositions.get(path.paths[i][j]*2) / mScaleFactor;
-					double endY = mCurrentPositions.get(path.paths[i][j]*2+1) / mScaleFactor;
-									
-					startX = startX*scale+translateX;
-					endX = endX*scale+translateX;
-					startY = startY*scale+translateY;
-					endY = endY*scale+translateY;
 					
-					canvas.drawLine((float)startX, (float)startY, (float)endX, (float)endY, pt);
-				
-					Log.v(TAG, "Print contour:  ("+ startX + "," + startY + ") to (" +endX+","+endY+")" );
+						Log.v(TAG, "Print contour:  ("+ startX + "," + startY + ") to (" +endX+","+endY+")" );
+					}
 				}
-				
 			}
 		}
 		else if (test_PlotPts){
@@ -1344,6 +1361,8 @@ public class FaceAlignProc{
 	
 	private boolean test_PlotPatch = false;
 	private boolean test_PlotResponse = false;
+	
+	static final int test_circle_radius = 6;
 	//For test
 }
 
