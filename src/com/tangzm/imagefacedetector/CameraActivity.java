@@ -111,7 +111,8 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 	private Bitmap bufferToBitmap(final byte[] data) {
 		Camera.Parameters param = mCamera.getParameters();
 				
-		Bitmap image = Bitmap.createBitmap(param.getPreviewSize().width, param.getPreviewSize().height, Bitmap.Config.RGB_565);
+		//90 degree rotated
+		Bitmap image = Bitmap.createBitmap(mPreviewHeight, mPreviewWidth, Bitmap.Config.RGB_565);
 		Buffer buffer = ByteBuffer.wrap(data);
 		image.copyPixelsFromBuffer(buffer);
 		
@@ -173,11 +174,19 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 	};
 	
 	public void processFrame(final byte[] data, final Runnable bufferConsumed) {
-		Log.i(TAG, "frame comes");
-		
+		Log.i(TAG, "frame comes, current state is "+mFSM.getCurrentState());
+	
 		if (mFSM.STATE_HARD_CHECK == mFSM.getCurrentState() ||
 				mFSM.STATE_SOFT_CHECK == mFSM.getCurrentState()) {
 			try {
+				if (mPreviewWidth < 0.1){
+					Camera.Size size = mCamera.getParameters().getPreviewSize();
+					
+					//90 degree rotated
+					mPreviewHeight = size.width;
+					mPreviewWidth = size.height; 
+				}
+				
 				mProc.searchEyesInImage(bufferToBitmap(data), new FaceAlignProc.CallbackWithEyePts() {
 					@Override
 					public void finish(float[] eyePts) {
@@ -202,9 +211,9 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 		else if (mFSM.STATE_HARD_FIT == mFSM.getCurrentState()) {
 			//asm optimize
 			
-			final float plotScale = (float)(mPlotView.getWidth()) / (float)(mCamera.getParameters().getPreviewSize().height);  //90 degree rotated
+			final float plotScale = (float)(mPlotView.getWidth()) / mPreviewWidth;  //90 degree rotated
 			try {
-				mProc.searchInImage(this.getApplicationContext(), bufferToBitmap(data), Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
+				mProc.searchInImage(bufferToBitmap(data), Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
 					@Override
 					public void finish(boolean status) {
 						
@@ -233,11 +242,10 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 			//mFSM.notifyFit();
 			//mCamera.addCallbackBuffer(data);
 			
+			final float plotScale = (float)(mPlotView.getWidth()) / mPreviewWidth; 
 			
-			
-			final float plotScale = (float)(mPlotView.getWidth()) / (float)(mCamera.getParameters().getPreviewSize().height); //90 degree rotated
 			try {
-				mProc.optimizeInImage(this.getApplicationContext(), bufferToBitmap(data), Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
+				mProc.optimizeInImage(bufferToBitmap(data), Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
 					@Override
 					public void finish(boolean status) {
 						Log.i(TAG, "The result of soft fit is "+status);
@@ -289,6 +297,9 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 	private CameraPreview mPreview;
 	private int mCameraID;
 	
+	private int mPreviewWidth = 0;
+	private int mPreviewHeight = 0;
+	
 	private BufferHandler mBufferHandler;
 	
 	private CameraFaceTrackFSM mFSM;
@@ -301,7 +312,8 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 	private float rightEyeX;
 	private float rightEyeY;
 	
-	private static final String TAG="CameraFaceFit";
+	
+	private static final String TAG="CameraActivity";
 
 
 }

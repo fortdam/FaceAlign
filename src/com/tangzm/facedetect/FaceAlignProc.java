@@ -62,6 +62,8 @@ public class FaceAlignProc{
 
 		mModel = new FaceModel(ctx, resId);
 		
+		mRS = RenderScript.create(ctx);
+		
         mFilter = new Filter2D(
         		ctx, 
         		mModel.patchModel.weightsList, 
@@ -120,7 +122,7 @@ public class FaceAlignProc{
 		} while(false == checkConvergence(type));	
 	}
 	
-	private void doSearchImage(Context ctx, Bitmap image, Algorithm type) throws Exception {
+	private void doSearchImage(Bitmap image, Algorithm type) throws Exception {
 		float[] eyePositions = makeInitialGuess(image);
 		
 		if (null == eyePositions) {
@@ -128,17 +130,17 @@ public class FaceAlignProc{
 		}
 		
 		initializeParameters(eyePositions[0], eyePositions[1], eyePositions[2], eyePositions[3]);
-		setCurrentBitmap(ctx, image);
+		setCurrentBitmap(image);
 		doOptimize(type);
 	}
 	
-	private void doSearchImage(Context ctx, Bitmap image, Algorithm type, float leftEyeX, float leftEyeY, float rightEyeX, float rightEyeY) throws Exception {
+	private void doSearchImage(Bitmap image, Algorithm type, float leftEyeX, float leftEyeY, float rightEyeX, float rightEyeY) throws Exception {
 		initializeParameters(leftEyeX, leftEyeY, rightEyeX, rightEyeY);
-		setCurrentBitmap(ctx, image);
+		setCurrentBitmap(image);
 		doOptimize(type);	
 	}
 	
-	private void doOptimizeImage(Context ctx, Bitmap image, Algorithm type) throws Exception{
+	private void doOptimizeImage(Bitmap image, Algorithm type) throws Exception{
 		FuncTracer.startFunc();
 		if (null == mModel){
 			throw new ModelUnloadedException();
@@ -146,7 +148,7 @@ public class FaceAlignProc{
 		
 		clearFitHistory();
 		adjustScaleFactor(); //use last result as current scale hint, it should be more proper than fixed scale factor
-		setCurrentBitmap(ctx, image);
+		setCurrentBitmap(image);
 		doOptimize(type);
 		FuncTracer.endFunc();
 	}
@@ -167,18 +169,23 @@ public class FaceAlignProc{
 			Handler handler = new Handler(new Handler.Callback() {
 				@Override
 				public boolean handleMessage(Message msg) {
-					Bundle data = msg.getData();
-					if (null == data){
-						cb.finish(null);
+					if (MESSAGE_ID_PROCESS_FINISH == msg.what){
+						Bundle data = msg.getData();
+						if (null == data){
+							cb.finish(null);
+						}
+						else {
+							cb.finish(data.getFloatArray("value"));
+						}
+						return true;
 					}
 					else {
-						cb.finish(data.getFloatArray("value"));
+						return false;
 					}
-					return false;
 				}
 			});
 			
-			final Message msg = handler.obtainMessage();
+			final Message msg = handler.obtainMessage(MESSAGE_ID_PROCESS_FINISH);
 			msg.arg1 = 1;
 			
 			new Thread(new Runnable(){
@@ -195,6 +202,7 @@ public class FaceAlignProc{
 						}
 					}
 					catch (Exception e){
+						e.printStackTrace();
 						msg.setData(null);
 					}
 					finally {
@@ -207,7 +215,7 @@ public class FaceAlignProc{
 		}
 	}
 	
-	synchronized public void searchInImage(final Context ctx, final Bitmap image, final Algorithm type, final Callback cb) throws Exception{
+	synchronized public void searchInImage(final Bitmap image, final Algorithm type, final Callback cb) throws Exception{
 		FuncTracer.startFunc();		
 		
 		if (mRunning) {
@@ -217,31 +225,36 @@ public class FaceAlignProc{
 		mRunning = true;
 		
 		if (null == cb){
-			doSearchImage(ctx, image, type);
+			doSearchImage(image, type);
 			mRunning = false;
 		}
 		else {
 			Handler handler = new Handler(new Handler.Callback() {
 				@Override
 				public boolean handleMessage(Message msg) {
-					// TODO Auto-generated method stub
-					if (1 == msg.arg1){
-						cb.finish(true);
+					if (MESSAGE_ID_PROCESS_FINISH == msg.what) {
+						// TODO Auto-generated method stub
+						if (1 == msg.arg1){
+							cb.finish(true);
+						}
+						else {
+							cb.finish(false);
+						}
+						return true;
 					}
 					else {
-						cb.finish(false);
+						return false;
 					}
-					return false;
 				}
 			});
 			
-			final Message msg = handler.obtainMessage();
+			final Message msg = handler.obtainMessage(MESSAGE_ID_PROCESS_FINISH);
 			msg.arg1 = 1;
 			
 			new Thread(new Runnable(){
 				public void run() {
 					try {
-						doSearchImage(ctx, image, type);
+						doSearchImage(image, type);
 					}
 					catch (Exception e){
 						e.printStackTrace();
@@ -258,7 +271,7 @@ public class FaceAlignProc{
 		FuncTracer.endFunc();
 	}
 	
-	synchronized public void searchInImage(final Context ctx, final Bitmap image, final Algorithm type, final Callback cb, final float leftEyeX, final float leftEyeY, final float rightEyeX, final float rightEyeY) throws Exception{
+	synchronized public void searchInImage(final Bitmap image, final Algorithm type, final Callback cb, final float leftEyeX, final float leftEyeY, final float rightEyeX, final float rightEyeY) throws Exception{
 		FuncTracer.startFunc();		
 		
 		if (mRunning) {
@@ -268,31 +281,35 @@ public class FaceAlignProc{
 		mRunning = true;
 		
 		if (null == cb){
-			doSearchImage(ctx, image, type, leftEyeX, leftEyeY, rightEyeX, rightEyeY);
+			doSearchImage(image, type, leftEyeX, leftEyeY, rightEyeX, rightEyeY);
 			mRunning = false;
 		}
 		else {
 			Handler handler = new Handler(new Handler.Callback() {
 				@Override
 				public boolean handleMessage(Message msg) {
-					// TODO Auto-generated method stub
-					if (1 == msg.arg1){
-						cb.finish(true);
+					if (MESSAGE_ID_PROCESS_FINISH == msg.what){
+						if (1 == msg.arg1){
+							cb.finish(true);
+						}
+						else {
+							cb.finish(false);
+						}
+						return true;
 					}
 					else {
-						cb.finish(false);
+						return false;
 					}
-					return false;
 				}
 			});
 			
-			final Message msg = handler.obtainMessage();
+			final Message msg = handler.obtainMessage(MESSAGE_ID_PROCESS_FINISH);
 			msg.arg1 = 1;
 			
 			new Thread(new Runnable(){
 				public void run() {
 					try {
-						doSearchImage(ctx, image, type, leftEyeX, leftEyeY, rightEyeX, rightEyeY);
+						doSearchImage(image, type, leftEyeX, leftEyeY, rightEyeX, rightEyeY);
 					}
 					catch (Exception e){
 						e.printStackTrace();
@@ -309,7 +326,7 @@ public class FaceAlignProc{
 		FuncTracer.endFunc();
 	}
 	
-	synchronized public void optimizeInImage(final Context ctx, final Bitmap image, final Algorithm type, final Callback cb) throws Exception{
+	synchronized public void optimizeInImage(final Bitmap image, final Algorithm type, final Callback cb) throws Exception{
 		FuncTracer.startFunc();		
 				
 		if (mRunning) {
@@ -319,31 +336,35 @@ public class FaceAlignProc{
 		mRunning = true;
 		
 		if (null == cb){
-			doOptimizeImage(ctx, image, type);
+			doOptimizeImage(image, type);
 			mRunning = false;
 		}
 		else {
 			Handler handler = new Handler(new Handler.Callback() {
 				@Override
 				public boolean handleMessage(Message msg) {
-					// TODO Auto-generated method stub
-					if (1 == msg.arg1){
-						cb.finish(true);
+					if (MESSAGE_ID_PROCESS_FINISH == msg.what){
+						if (1 == msg.arg1){
+							cb.finish(true);
+						}
+						else {
+							cb.finish(false);
+						}
+						return true;
 					}
 					else {
-						cb.finish(false);
+						return false;
 					}
-					return false;
 				}
 			});
 			
-			final Message msg = handler.obtainMessage();
+			final Message msg = handler.obtainMessage(MESSAGE_ID_PROCESS_FINISH);
 			msg.arg1 = 1;
 			
 			new Thread(new Runnable(){
 				public void run() {
 					try {
-						doOptimizeImage(ctx, image, type);
+						doOptimizeImage(image, type);
 					}
 					catch (Exception e){
 						e.printStackTrace();
@@ -422,7 +443,7 @@ public class FaceAlignProc{
         }
 	}
 	
-	private void setCurrentBitmap(Context ctx, Bitmap image) throws Exception
+	private void setCurrentBitmap(Bitmap image) throws Exception
 	{	
         Bitmap imgProcess = Bitmap.createScaledBitmap(image, (int)(image.getWidth()*mScaleFactor), (int)(image.getHeight()*mScaleFactor), true);
 
@@ -430,28 +451,28 @@ public class FaceAlignProc{
         mImageH = imgProcess.getHeight();
         
         //Create the float image
-        RenderScript rs = RenderScript.create(ctx);
+        ;
         
         if (imgProcess.getConfig() == Bitmap.Config.ARGB_8888) {
-	        ScriptC_im2float script = new ScriptC_im2float(rs);
-	        Allocation inAlloc = Allocation.createFromBitmap(rs, imgProcess);
-	        Type.Builder tb = new Type.Builder(rs, Element.U8(rs));
+	        ScriptC_im2float script = new ScriptC_im2float(mRS);
+	        Allocation inAlloc = Allocation.createFromBitmap(mRS, imgProcess);
+	        Type.Builder tb = new Type.Builder(mRS, Element.U8(mRS));
 	        tb.setX(mImageW).setY(mImageH);
 	        mImgGrayScaled = new byte[mImageW*mImageH];
-	        Allocation outAlloc = Allocation.createTyped(rs, tb.create());
+	        Allocation outAlloc = Allocation.createTyped(mRS, tb.create());
 	        script.forEach_root(inAlloc, outAlloc);
 	        outAlloc.copyTo(mImgGrayScaled);		
         }
         else if (imgProcess.getConfig() == Bitmap.Config.RGB_565) {
-	        ScriptC_im2float_565 script = new ScriptC_im2float_565(rs);
-	        Type.Builder tbIn = new Type.Builder(rs, Element.U8_2(rs));
-	        Type.Builder tbOut = new Type.Builder(rs, Element.U8(rs));
+	        ScriptC_im2float_565 script = new ScriptC_im2float_565(mRS);
+	        Type.Builder tbIn = new Type.Builder(mRS, Element.U8_2(mRS));
+	        Type.Builder tbOut = new Type.Builder(mRS, Element.U8(mRS));
 	        tbIn.setX(mImageW).setY(mImageH);
 	        tbOut.setX(mImageW).setY(mImageH);
 	        byte[] mOriginalBytes = new byte[mImageW*mImageH*2];
 	        mImgGrayScaled = new byte[mImageW*mImageH];
-	        Allocation inAlloc = Allocation.createTyped(rs, tbIn.create());
-	        Allocation outAlloc = Allocation.createTyped(rs, tbOut.create());
+	        Allocation inAlloc = Allocation.createTyped(mRS, tbIn.create());
+	        Allocation outAlloc = Allocation.createTyped(mRS, tbOut.create());
 	        ByteBuffer buffer = ByteBuffer.wrap(mOriginalBytes);
 	        imgProcess.copyPixelsToBuffer(buffer);
 	        inAlloc.copyFrom(mOriginalBytes);
@@ -1273,6 +1294,8 @@ public class FaceAlignProc{
 
 
 	private static final int INITIAL_FIT_MIN_DIM = 100;
+	
+	private static final int MESSAGE_ID_PROCESS_FINISH = 12375; //a magic number
 
 	private static final int SEARCH_WIN_W = 11;
 	private static final int SEARCH_WIN_H = 11;
@@ -1285,6 +1308,8 @@ public class FaceAlignProc{
 	private static final int ASM_QUICK_OPTIMIZATION_LIMIT = 1;
 	private static final int CQF_QUICK_OPTIMIZATION_LIMIT = 1;
 	private static final int KDE_QUICK_OPTIMIZATION_LIMIT = 1;
+	
+	private RenderScript mRS;
 	
 	//Image Data
 	private int mImageW;

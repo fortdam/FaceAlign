@@ -74,7 +74,7 @@ public class ImageActivity extends Activity {
 
 		
 		try{
-			mProc.searchInImage(mAppCntx, mCurrImage, type, new FaceAlignProc.Callback() {
+			mProc.searchInImage(mCurrImage, type, new FaceAlignProc.Callback() {
 				
 				@Override
 				public void finish(boolean status) {
