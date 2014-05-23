@@ -699,8 +699,15 @@ public class FaceAlignProc{
 		
 		QMatrix jacob = createJacobian(mCurrentParams);
 		QMatrix transJacob = jacob.transpose();
-				
-		QMatrix deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minusSelf(mCurrentPositions));
+	    QMatrix weights = mModel.shapeModel.mWeights;
+		QMatrix deltaParams;
+
+		if (null == weights) {
+			deltaParams = transJacob.mult(jacob).invert().mult(transJacob).mult(newPositions.minusSelf(mCurrentPositions));
+		}
+		else {
+			deltaParams = transJacob.mult(weights).mult(jacob).invert().mult(transJacob).mult(weights).mult(newPositions.minusSelf(mCurrentPositions));			
+		}
        
 		Log.i(TAG, "The deltaParam sum = " + deltaParams.innerProduct());
 
@@ -715,9 +722,17 @@ public class FaceAlignProc{
 		QMatrix jacob = createJacobian(mCurrentParams);
 		QMatrix transJacob = jacob.transpose();
 		QMatrix invCovariance = createInvCovariance(newPositions, responseImg);
-		newPositions.printOut();
-		invCovariance.printOut();
-		QMatrix deltaParams = transJacob.mult(invCovariance).mult(jacob).invert().mult(transJacob).mult(invCovariance).mult(newPositions.minusSelf(mCurrentPositions));
+		
+		QMatrix weights = mModel.shapeModel.mWeights;
+		
+		QMatrix deltaParams;
+		
+		if (null == weights) {
+			deltaParams = transJacob.mult(invCovariance).mult(jacob).invert().mult(transJacob).mult(invCovariance).mult(newPositions.minusSelf(mCurrentPositions));
+		}
+		else {
+			deltaParams = transJacob.mult(weights).mult(invCovariance).mult(jacob).invert().mult(transJacob).mult(weights).mult(invCovariance).mult(newPositions.minusSelf(mCurrentPositions));
+		}
 		
 		mCurrentParams = regularizeParams(deltaParams.plusSelf(mCurrentParams));
 		mCurrentPositions = getShape(mCurrentParams);		
@@ -1006,7 +1021,7 @@ public class FaceAlignProc{
 			int offsetX = -(SEARCH_WIN_W-1)/2;
 			int offsetY = -(SEARCH_WIN_H-1)/2;
 			
-			for (int i=27; i<28; i++){
+			for (int i=44; i<45; i++){
 				double centX = mCropPositions.get(i*2);
 				double centY = mCropPositions.get(i*2+1);
 				

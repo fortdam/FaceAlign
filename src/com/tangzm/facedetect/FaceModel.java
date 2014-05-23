@@ -102,6 +102,7 @@ class ShapeModel {
 	public QMatrix mEigenVectors;
 	public QMatrix mEigenValues;
 	public QMatrix mEigenConstraints;
+    public QMatrix mWeights;
 	
 	public ShapeModel(JSONObject shape){
 		double[] eigenValues;
@@ -162,6 +163,14 @@ class ShapeModel {
             	mEigenValues = new QMatrix(eigenValues_f, numEvec, 1, true);
             	mEigenConstraints = new QMatrix(eigenConstraints_f, numEvec, 1, true);
             	mEigenVectors = new QMatrix(eigenVectors_f, numPts*2, numEvec, true);
+            	
+            	//Hand-made weight model
+            	float[] weightsVec = new float[POINT_WEIGHTS.length*2];
+            	for (int i=0; i<POINT_WEIGHTS.length; i++){
+            		weightsVec[i*2] = POINT_WEIGHTS[i];
+            		weightsVec[i*2+1] = POINT_WEIGHTS[i];
+            	}
+            	mWeights = QMatrix.diagonal(weightsVec);
             }
 		}
 		catch (Exception e){
@@ -174,6 +183,18 @@ class ShapeModel {
 	private static final String EVEC_LABEL = "eigenVectors";
 	private static final String EVALUE_LABEL = "eigenValues";
 	private static final String MEAN_LABEL = "meanShape";
+	
+	private static final float[] POINT_WEIGHTS = {
+		 /*     0     1     2     3     4     5     6     7     8     9     
+		/*0*/   1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
+		/*10*/	1,    1,    1,    1,    1,    1,    1, 0.5f, 0.5f,    1,
+		/*20*/  1, 0.5f, 0.5f,    1,    1,    1,    1,    1,    1,    1,
+		/*30*/  1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
+		/*40*/  1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
+		/*50*/  1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
+		/*60*/  1,    1,    1,    1,    1,    1,    1,    1,    1,    1,
+		/*70*/  1
+	};
 }
 
 class PatchModel {

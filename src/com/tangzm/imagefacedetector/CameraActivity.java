@@ -22,6 +22,7 @@ import android.view.WindowManager;
 import android.widget.FrameLayout;
 
 import com.tangzm.facedetect.FaceAlignProc;
+import com.tangzm.facedetect.FuncTracer;
 import com.tangzm.facedetect.FaceAlignProc.Algorithm;
 import com.tangzm.imagefacedetector.CameraFaceTrackFSM.Event;
 
@@ -109,6 +110,7 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 	}
 	
 	private Bitmap bufferToBitmap(final byte[] data) {
+		FuncTracer.startFunc();
 		Camera.Parameters param = mCamera.getParameters();
 				
 		//90 degree rotated
@@ -123,7 +125,7 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 		Bitmap rotateImage = Bitmap.createBitmap(image, 0, 0, image.getWidth(), image.getHeight(), matrix, true);	
 		
 		//saveBitmapFile(rotateImage);
-		
+		FuncTracer.endFunc();
 		return rotateImage;
 	}
 	
@@ -229,6 +231,7 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 						}
 						
 						mFSM.sendEvent(Event.FIT_COMPLETE);
+						Log.i(TAG, "one frame is processed, take next...");
 						bufferConsumed.run();
 					}
 				}, leftEyeX, leftEyeY, rightEyeX, rightEyeY);
@@ -245,7 +248,7 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 			final float plotScale = (float)(mPlotView.getWidth()) / mPreviewWidth; 
 			
 			try {
-				mProc.optimizeInImage(bufferToBitmap(data), Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
+				mProc.optimizeInImage(bufferToBitmap(data), Algorithm.KDE_QUICK, new FaceAlignProc.Callback() {
 					@Override
 					public void finish(boolean status) {
 						Log.i(TAG, "The result of soft fit is "+status);

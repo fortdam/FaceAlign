@@ -38,6 +38,15 @@ public class QMatrix {
 		return m;
 	}
 	
+	public static QMatrix diagonal(float[] diagValues) {
+		QMatrix m = new QMatrix(diagValues.length, diagValues.length);
+		m.mDiagonal = true; 
+		for(int i=0; i<diagValues.length; i++){
+			m.set(i, i, diagValues[i]);
+		}
+		
+		return m;
+	}
 	
 	public QMatrix(QMatrix m, boolean deepCopy){
 		mRows = m.mRows;
@@ -363,7 +372,29 @@ public class QMatrix {
 			return null;
 		}
 		
-		if (mRows*mColumns*another.mColumns < 1000) {
+		if (mDiagonal){
+			QMatrix result = new QMatrix(another, true);
+			
+			for (int i=0; i<result.mRows; i++){
+				for (int j=0; j<result.mColumns; j++){
+					result.set(i, j, result.get(i,j)*get(i,i));
+				}
+			}
+			
+			return result;
+		}
+		else if (another.mDiagonal){
+			QMatrix result = new QMatrix(this, true);
+			
+			for (int i=0; i<result.mColumns; i++){
+				for (int j=0; j<result.mRows; j++){
+					result.set(j, i, result.get(j,i)*another.get(i,i));
+				}
+			}
+			
+			return result;
+		}
+		else if (mRows*mColumns*another.mColumns < 1000) {
 			return multSlow(another);
 		}
 		else {
@@ -417,6 +448,14 @@ public class QMatrix {
 		if (STRICT_MODE && mRows!=mColumns) {
 			Log.e(TAG, "Exception: Size error inversing QMatrix");
 			return null;
+		}
+		
+		if (mDiagonal){
+			QMatrix result = new QMatrix(this, true);
+			for (int i=0; i<mRows; i++){
+				result.set(i, i, 1.0f/result.get(i,i));
+			}
+			return result;
 		}
 		
 		luDecomp();
@@ -538,6 +577,8 @@ public class QMatrix {
 	
 	private float[] mLUMat;	
 	private int[] mPMat; //pmat is expressed as a vector
+	
+	private boolean mDiagonal = false;
 	
 	private static RenderScript mRS;
     private static ScriptC_qmat mScript;
