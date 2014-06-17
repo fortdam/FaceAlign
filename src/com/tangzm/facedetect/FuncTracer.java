@@ -104,7 +104,7 @@ public class FuncTracer {
 	public static void procException(Exception e) {
 		mException = true;
 	}
-	private static boolean mEnabled = true;
+	private static boolean mEnabled = false;
 	private static boolean mException = false;
 	
 	private static final String TAG = "FuncTracer";

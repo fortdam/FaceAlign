@@ -63,12 +63,14 @@ public class CameraFaceTrackFSM {
 
 			@Override
 			public void process(Event evt) {
+				
 				if (Event.FACE_DETECTED == evt) {
 					changeState(STATE_HARD_FIT);
 				}
 				else if (Event.FACE_NOT_DETECTED == evt) {
 					changeState(STATE_IDLE);
 				}
+				
 			}
     	};
     	
@@ -82,9 +84,12 @@ public class CameraFaceTrackFSM {
 
 			@Override
 			public void process(Event evt) {
+
+				
 				if (Event.FIT_COMPLETE == evt) {
 					changeState(STATE_SOFT_FIT);
 				}
+				
 			}
     	};
     	

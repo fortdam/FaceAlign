@@ -24,6 +24,7 @@ import android.widget.FrameLayout;
 import com.tangzm.facedetect.FaceAlignProc;
 import com.tangzm.facedetect.FuncTracer;
 import com.tangzm.facedetect.FaceAlignProc.Algorithm;
+import com.tangzm.facedetect.RawImage;
 import com.tangzm.imagefacedetector.CameraFaceTrackFSM.Event;
 
 public class CameraActivity extends Activity 
@@ -114,19 +115,36 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 		Camera.Parameters param = mCamera.getParameters();
 				
 		//90 degree rotated
+		FuncTracer.startProc("CopyBuffer");
 		Bitmap image = Bitmap.createBitmap(mPreviewHeight, mPreviewWidth, Bitmap.Config.RGB_565);
 		Buffer buffer = ByteBuffer.wrap(data);
 		image.copyPixelsFromBuffer(buffer);
+		FuncTracer.endProc("CopyBuffer");
 		
+		FuncTracer.startProc("Rotate");
 		Matrix matrix = new Matrix();
 		matrix.postScale(-1, 1);
 		matrix.preRotate(-90);
 		
 		Bitmap rotateImage = Bitmap.createBitmap(image, 0, 0, image.getWidth(), image.getHeight(), matrix, true);	
+		FuncTracer.endProc("Rotate");
 		
 		//saveBitmapFile(rotateImage);
 		FuncTracer.endFunc();
 		return rotateImage;
+	}
+	
+	private RawImage bufferToRawImage(final byte[] data){
+		RawImage image = new RawImage();
+		
+		image.mData = data;
+		//90 rotate
+		image.mWidth = mPreviewHeight;
+		image.mHeight = mPreviewWidth;
+		image.mRotate = 90;
+		image.mMirror = true;
+		
+		return image;
 	}
 	
 	class BufferHandler implements Camera.PreviewCallback{
@@ -248,7 +266,7 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 			final float plotScale = (float)(mPlotView.getWidth()) / mPreviewWidth; 
 			
 			try {
-				mProc.optimizeInImage(bufferToBitmap(data), Algorithm.KDE_QUICK, new FaceAlignProc.Callback() {
+				mProc.optimizeInImage(bufferToRawImage(data), Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
 					@Override
 					public void finish(boolean status) {
 						Log.i(TAG, "The result of soft fit is "+status);

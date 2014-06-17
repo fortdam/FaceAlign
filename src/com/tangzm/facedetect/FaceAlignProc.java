@@ -101,15 +101,25 @@ public class FaceAlignProc{
 		FaceDetector detector = new FaceDetector(width, height, 1);
 		num = detector.findFaces(processBmp, faces);
 		
-		Face face = faces[0];
-		
-		PointF mid = new PointF();
-		face.getMidPoint(mid);
-		
-		ret[0] = (mid.x - face.eyesDistance()/2) * scaleFactor;
-		ret[1] = mid.y * scaleFactor;
-		ret[2] = (mid.x + face.eyesDistance()/2) * scaleFactor;
-		ret[3] = mid.y * scaleFactor;
+		if (num > 0) {
+			Face face = faces[0];
+			
+			PointF mid = new PointF();
+			face.getMidPoint(mid);
+			
+			ret[0] = (mid.x - face.eyesDistance()/2) * scaleFactor;
+			ret[1] = mid.y * scaleFactor;
+			ret[2] = (mid.x + face.eyesDistance()/2) * scaleFactor;
+			ret[3] = mid.y * scaleFactor;
+		}
+		//XXX Fix me!
+		else {
+			ret[0] = 20 * scaleFactor;
+			ret[1] = 50 * scaleFactor;
+			ret[2] = 40 * scaleFactor;
+			ret[3] = 50 * scaleFactor;		
+		}
+		//XXX Fix Me ends
 		
 		FuncTracer.endFunc();
 		return ret;
@@ -134,13 +144,18 @@ public class FaceAlignProc{
 		doOptimize(type);
 	}
 	
-	private void doSearchImage(Bitmap image, Algorithm type, float leftEyeX, float leftEyeY, float rightEyeX, float rightEyeY) throws Exception {
+	private void doSearchImage(Object image, Algorithm type, float leftEyeX, float leftEyeY, float rightEyeX, float rightEyeY) throws Exception {
 		initializeParameters(leftEyeX, leftEyeY, rightEyeX, rightEyeY);
-		setCurrentBitmap(image);
+		if (image instanceof Bitmap){
+			setCurrentBitmap((Bitmap)image);
+		}
+		else if (image instanceof RawImage){
+			setCurrentBitmapRaw((RawImage)image);
+		}
 		doOptimize(type);	
 	}
 	
-	private void doOptimizeImage(Bitmap image, Algorithm type) throws Exception{
+	private void doOptimizeImage(Object image, Algorithm type) throws Exception{
 		FuncTracer.startFunc();
 		if (null == mModel){
 			throw new ModelUnloadedException();
@@ -148,7 +163,12 @@ public class FaceAlignProc{
 		
 		clearFitHistory();
 		adjustScaleFactor(); //use last result as current scale hint, it should be more proper than fixed scale factor
-		setCurrentBitmap(image);
+		if (image instanceof Bitmap){
+			setCurrentBitmap((Bitmap)image);
+		}
+		else if (image instanceof RawImage){
+			setCurrentBitmapRaw((RawImage)image);
+		}		
 		doOptimize(type);
 		FuncTracer.endFunc();
 	}
@@ -326,7 +346,7 @@ public class FaceAlignProc{
 		FuncTracer.endFunc();
 	}
 	
-	synchronized public void optimizeInImage(final Bitmap image, final Algorithm type, final Callback cb) throws Exception{
+	synchronized public void optimizeInImage(final Object image, final Algorithm type, final Callback cb) throws Exception{
 		FuncTracer.startFunc();		
 				
 		if (mRunning) {
@@ -441,6 +461,69 @@ public class FaceAlignProc{
 			mCurrentParams.set(2, mCurrentParams.get(2)/adjustScale);
 			mCurrentParams.set(3, mCurrentParams.get(3)/adjustScale);
         }
+	}
+	
+	private void setCurrentBitmapRaw(RawImage image) throws Exception
+	{	
+		if (image.mRotate==90 || image.mRotate==270) {
+			mImageW = (int)(image.mHeight * mScaleFactor);
+			mImageH = (int)(image.mWidth * mScaleFactor);			
+		}
+		else {
+			mImageW = (int)(image.mWidth * mScaleFactor);
+			mImageH = (int)(image.mHeight * mScaleFactor);
+		}
+
+        Log.i("tangzmm", "original width="+image.mWidth+ " original height="+image.mHeight);
+        Log.i("tangzmm", "width="+mImageW+" height="+mImageH);
+
+        ScriptC_buffer2float script = new ScriptC_buffer2float(mRS);
+        Type.Builder tbIn = new Type.Builder(mRS, Element.U8(mRS));
+        Type.Builder tbOut = new Type.Builder(mRS, Element.U8(mRS));
+        tbIn.setX(image.mWidth*image.mHeight*2);
+        tbOut.setX(mImageW).setY(mImageH);
+
+        mImgGrayScaled = new byte[mImageW*mImageH];
+        Allocation inAlloc = Allocation.createTyped(mRS, tbIn.create());
+        Allocation outAlloc = Allocation.createTyped(mRS, tbOut.create());
+        
+        inAlloc.copyFrom(image.mData);
+
+        script.set_rotate(image.mRotate);
+        if (image.mMirror){
+        	script.set_mirror(1);
+        }
+        else {
+        	script.set_mirror(0);
+        }
+        script.set_oWidth(image.mWidth);
+        script.set_oHeight(image.mHeight);
+        if (image.mRotate==90 || image.mRotate==270){
+        	script.set_mWidth(image.mHeight);
+        	script.set_mHeight(image.mWidth);
+        }
+        else{
+        	script.set_mWidth(image.mWidth);
+        	script.set_mHeight(image.mHeight);
+        }
+        script.set_sWidth(mImageW);
+        script.set_sHeight(mImageH);
+        
+        script.bind_input(inAlloc);
+        script.bind_output(outAlloc);
+        
+        int[] indexBuffer = new int[mImageH];
+        
+        for (int i=0; i<indexBuffer.length; i++){
+        	indexBuffer[i] = i;
+        }
+        Type.Builder tbIndex = new Type.Builder(mRS, Element.U32(mRS));
+        tbIndex.setX(indexBuffer.length);
+        Allocation indexAlloc = Allocation.createTyped(mRS, tbIndex.create());
+        indexAlloc.copyFrom(indexBuffer);
+        script.forEach_process(indexAlloc);
+        
+        outAlloc.copyTo(mImgGrayScaled);
 	}
 	
 	private void setCurrentBitmap(Bitmap image) throws Exception
