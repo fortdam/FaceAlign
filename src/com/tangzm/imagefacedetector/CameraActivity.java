@@ -165,15 +165,12 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 								break;
 							}
 						}
-
 						deliverFrameIfNeeded();
 					}
-					
 				});
 			}
 		}
 		
-
 		@Override
 		public void onPreviewFrame(final byte[] data, Camera camera) {
 			mBuffers.add(data);
@@ -199,7 +196,7 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 		if (mFSM.STATE_HARD_CHECK == mFSM.getCurrentState() ||
 				mFSM.STATE_SOFT_CHECK == mFSM.getCurrentState()) {
 			try {
-				if (mPreviewWidth < 0.1){
+				if (mPreviewWidth < 0.1) {
 					Camera.Size size = mCamera.getParameters().getPreviewSize();
 					
 					//90 degree rotated
@@ -295,11 +292,25 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 	}
 	
 	public void onFaceDetection(Face[] faces, Camera camera) {
-		Log.i(TAG, "face detect!");
+		Log.i("tangzmm", "face detect!");
 	}
 	
 	public void click(View view){
 		mFSM.sendEvent(Event.CHECK_REQUIRED);
+		mCamera.setFaceDetectionListener(new Camera.FaceDetectionListener() {
+			
+			@Override
+			public void onFaceDetection(Face[] faces, Camera camera) {
+				// TODO Auto-generated method stub
+				Log.i("tangzmm", "face detected!");
+			}
+		});
+		try{
+		    mCamera.startFaceDetection();
+		}
+		catch(Exception e){
+			e.printStackTrace();
+		}
 	}
 
 	@Override
@@ -333,8 +344,5 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 	private float rightEyeX;
 	private float rightEyeY;
 	
-	
 	private static final String TAG="CameraActivity";
-
-
 }

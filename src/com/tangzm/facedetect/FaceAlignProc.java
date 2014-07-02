@@ -84,7 +84,7 @@ public class FaceAlignProc{
 	private float[] makeInitialGuess(Bitmap bmp){
 		FuncTracer.startFunc();
 		
-		float[] ret = new float[4];
+		float[] ret = null;
 		Face[] faces = new Face[1];
 		int num = 0;
 		int scaleFactor = (bmp.getWidth()<bmp.getHeight()?bmp.getWidth():bmp.getHeight())/INITIAL_FIT_MIN_DIM;
@@ -102,6 +102,7 @@ public class FaceAlignProc{
 		num = detector.findFaces(processBmp, faces);
 		
 		if (num > 0) {
+			ret = new float[4];
 			Face face = faces[0];
 			
 			PointF mid = new PointF();
@@ -112,14 +113,6 @@ public class FaceAlignProc{
 			ret[2] = (mid.x + face.eyesDistance()/2) * scaleFactor;
 			ret[3] = mid.y * scaleFactor;
 		}
-		//XXX Fix me!
-		else {
-			ret[0] = 20 * scaleFactor;
-			ret[1] = 50 * scaleFactor;
-			ret[2] = 40 * scaleFactor;
-			ret[3] = 50 * scaleFactor;		
-		}
-		//XXX Fix Me ends
 		
 		FuncTracer.endFunc();
 		return ret;
@@ -215,9 +208,11 @@ public class FaceAlignProc{
 						if (null != ret){
 							Bundle data = new Bundle();
 							data.putFloatArray("value", ret);
+							Log.i("tangzmm", "eyes detect");
 							msg.setData(data);
 						}
 						else {
+							Log.i("tangzmm", "eyes not detect");
 							msg.setData(null);
 						}
 					}
@@ -473,9 +468,6 @@ public class FaceAlignProc{
 			mImageW = (int)(image.mWidth * mScaleFactor);
 			mImageH = (int)(image.mHeight * mScaleFactor);
 		}
-
-        Log.i("tangzmm", "original width="+image.mWidth+ " original height="+image.mHeight);
-        Log.i("tangzmm", "width="+mImageW+" height="+mImageH);
 
         ScriptC_buffer2float script = new ScriptC_buffer2float(mRS);
         Type.Builder tbIn = new Type.Builder(mRS, Element.U8(mRS));
@@ -1132,6 +1124,11 @@ public class FaceAlignProc{
 		
 		if (test_PlotContour){
 			for (int i=0; i<path.paths.length; i++){
+				
+				if (i==0){ //Do not draw the contour of face
+					continue;
+				}
+				
 				Paint pt = new Paint();
 				pt.setStrokeWidth(2);
 				

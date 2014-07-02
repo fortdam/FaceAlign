@@ -7,6 +7,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
+import android.hardware.Camera.Face;
 import android.util.Log;
 import android.view.Display;
 import android.view.SurfaceHolder;
@@ -42,6 +43,8 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
         try {
         	Camera.Parameters params = mCamera.getParameters();
             
+        	//params.setPreviewSize(1280, 720);
+        	
         	params.setPreviewFormat(ImageFormat.RGB_565);
         	int width = params.getPreviewSize().width;
         	int height = params.getPreviewSize().height;
@@ -58,8 +61,9 @@ public class CameraPreview extends SurfaceView implements SurfaceHolder.Callback
             
             mCamera.setPreviewCallbackWithBuffer(mPreviewCallback);            
             //mCamera.setFaceDetectionListener(mFaceDetectListener);
-            
-            mCamera.startPreview();         
+
+            mCamera.startPreview();  
+
 
         } catch (IOException e) {
             Log.d(TAG, "Error setting camera preview: " + e.getMessage());
