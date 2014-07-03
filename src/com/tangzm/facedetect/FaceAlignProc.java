@@ -469,7 +469,7 @@ public class FaceAlignProc{
 			mImageH = (int)(image.mHeight * mScaleFactor);
 		}
 
-        ScriptC_buffer2float script = new ScriptC_buffer2float(mRS);
+        ScriptC_RGB565_to_GrayScale8 script = new ScriptC_RGB565_to_GrayScale8(mRS);
         Type.Builder tbIn = new Type.Builder(mRS, Element.U8(mRS));
         Type.Builder tbOut = new Type.Builder(mRS, Element.U8(mRS));
         tbIn.setX(image.mWidth*image.mHeight*2);
@@ -529,7 +529,7 @@ public class FaceAlignProc{
         ;
         
         if (imgProcess.getConfig() == Bitmap.Config.ARGB_8888) {
-	        ScriptC_im2float script = new ScriptC_im2float(mRS);
+	        ScriptC_RGB888_to_GrayScale8 script = new ScriptC_RGB888_to_GrayScale8(mRS);
 	        Allocation inAlloc = Allocation.createFromBitmap(mRS, imgProcess);
 	        Type.Builder tb = new Type.Builder(mRS, Element.U8(mRS));
 	        tb.setX(mImageW).setY(mImageH);
@@ -538,20 +538,48 @@ public class FaceAlignProc{
 	        script.forEach_root(inAlloc, outAlloc);
 	        outAlloc.copyTo(mImgGrayScaled);		
         }
-        else if (imgProcess.getConfig() == Bitmap.Config.RGB_565) {
-	        ScriptC_im2float_565 script = new ScriptC_im2float_565(mRS);
-	        Type.Builder tbIn = new Type.Builder(mRS, Element.U8_2(mRS));
+        else if (imgProcess.getConfig() == Bitmap.Config.RGB_565) {  
+	        ScriptC_RGB565_to_GrayScale8 script = new ScriptC_RGB565_to_GrayScale8(mRS);
+	        Type.Builder tbIn = new Type.Builder(mRS, Element.U8(mRS));
 	        Type.Builder tbOut = new Type.Builder(mRS, Element.U8(mRS));
-	        tbIn.setX(mImageW).setY(mImageH);
+	        tbIn.setX(mImageW*mImageH*2);
 	        tbOut.setX(mImageW).setY(mImageH);
-	        byte[] mOriginalBytes = new byte[mImageW*mImageH*2];
+
 	        mImgGrayScaled = new byte[mImageW*mImageH];
 	        Allocation inAlloc = Allocation.createTyped(mRS, tbIn.create());
 	        Allocation outAlloc = Allocation.createTyped(mRS, tbOut.create());
+
+	        byte[] mOriginalBytes = new byte[mImageW*mImageH*2];
 	        ByteBuffer buffer = ByteBuffer.wrap(mOriginalBytes);
 	        imgProcess.copyPixelsToBuffer(buffer);
 	        inAlloc.copyFrom(mOriginalBytes);
-	        script.forEach_root(inAlloc, outAlloc);
+
+	        script.set_rotate(0);
+	        script.set_mirror(0);
+
+	        script.set_oWidth(mImageW);
+	        script.set_oHeight(mImageH);
+
+	        script.set_mWidth(mImageW);
+	        script.set_mHeight(mImageH);
+
+	        script.set_sWidth(mImageW);
+	        script.set_sHeight(mImageH);
+	        
+	        script.bind_input(inAlloc);
+	        script.bind_output(outAlloc);
+	        
+	        int[] indexBuffer = new int[mImageH];
+	        
+	        for (int i=0; i<indexBuffer.length; i++){
+	        	indexBuffer[i] = i;
+	        }
+	        Type.Builder tbIndex = new Type.Builder(mRS, Element.U32(mRS));
+	        tbIndex.setX(indexBuffer.length);
+	        Allocation indexAlloc = Allocation.createTyped(mRS, tbIndex.create());
+	        indexAlloc.copyFrom(indexBuffer);
+	        script.forEach_process(indexAlloc);
+	        
 	        outAlloc.copyTo(mImgGrayScaled);
         }
         else {
