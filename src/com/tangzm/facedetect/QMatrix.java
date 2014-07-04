@@ -2,8 +2,6 @@ package com.tangzm.facedetect;
 
 import org.ejml.simple.SimpleMatrix;
 
-import com.tangzm.facedetect.ScriptC_qmat;
-
 import android.content.Context;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
@@ -15,7 +13,7 @@ public class QMatrix {
 	
 	public static void init(Context ctx) {
 		mRS = RenderScript.create(ctx);
-		mScript = new ScriptC_qmat(mRS);
+		mScript = new ScriptC_q_matrix(mRS);
 		mTB = new Type.Builder(mRS, Element.U8(mRS));
 	}
 	
@@ -581,7 +579,7 @@ public class QMatrix {
 	private boolean mDiagonal = false;
 	
 	private static RenderScript mRS;
-    private static ScriptC_qmat mScript;
+    private static ScriptC_q_matrix mScript;
     private static Type.Builder mTB;
 	
 	private static final boolean STRICT_MODE = true;

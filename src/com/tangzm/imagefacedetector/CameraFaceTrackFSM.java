@@ -154,6 +154,8 @@ public class CameraFaceTrackFSM {
 				}
 				else if (Event.FIT_COMPLETE == evt) {
 					//mViewer.startProc();
+					
+
 				}
 			}
     	};

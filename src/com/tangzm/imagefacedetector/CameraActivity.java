@@ -10,6 +10,7 @@ import java.util.Vector;
 import android.app.Activity;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.hardware.Camera;
 import android.hardware.Camera.Face;
@@ -25,6 +26,7 @@ import com.tangzm.facedetect.FaceAlignProc;
 import com.tangzm.facedetect.FuncTracer;
 import com.tangzm.facedetect.FaceAlignProc.Algorithm;
 import com.tangzm.facedetect.RawImage;
+import com.tangzm.facedetect.RawImage.ImgType;
 import com.tangzm.imagefacedetector.CameraFaceTrackFSM.Event;
 
 public class CameraActivity extends Activity 
@@ -93,10 +95,13 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 	    return c; // returns null if camera is unavailable
 	}
 	
+	static int index = 0;
+
 	private void saveBitmapFile(Bitmap image) {
 		String path = Environment.getExternalStorageDirectory().toString();
 		OutputStream fOut = null;
-		File file = new File(path, "FaceCamTest"+".jpg");
+		File file = new File(path, "FaceCamTest"+index+".jpg");
+		index++;
 		try {
 		fOut = new FileOutputStream(file);
 
@@ -107,45 +112,31 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 		catch (Exception e){
 			e.printStackTrace();
 		}
+	}
+	
+	private RawImage CamBufferToRawImage(Camera camera, final byte[] data, RawImage.ImgType outType){
+		Camera.Parameters params = camera.getParameters();
+		
+		int prevWidth = params.getPreviewSize().width;
+		int prevHeight = params.getPreviewSize().height;
+		
+		RawImage result;
+		
+		if (ImageFormat.RGB_565 == params.getPreviewFormat()){
+			result = new RawImage(data, prevWidth, prevHeight, ImgType.TYPE_RGB565);
+		}
+		else if (ImageFormat.NV21 == params.getPreviewFormat()){
+			result = new RawImage(data, prevWidth, prevHeight, ImgType.TYPE_NV21);
+		}
+		else {
+			return null;
+		}
+		
+		result.mirror().rotate(90).setType(outType);
 
+		return result;
 	}
 	
-	private Bitmap bufferToBitmap(final byte[] data) {
-		FuncTracer.startFunc();
-		Camera.Parameters param = mCamera.getParameters();
-				
-		//90 degree rotated
-		FuncTracer.startProc("CopyBuffer");
-		Bitmap image = Bitmap.createBitmap(mPreviewHeight, mPreviewWidth, Bitmap.Config.RGB_565);
-		Buffer buffer = ByteBuffer.wrap(data);
-		image.copyPixelsFromBuffer(buffer);
-		FuncTracer.endProc("CopyBuffer");
-		
-		FuncTracer.startProc("Rotate");
-		Matrix matrix = new Matrix();
-		matrix.postScale(-1, 1);
-		matrix.preRotate(-90);
-		
-		Bitmap rotateImage = Bitmap.createBitmap(image, 0, 0, image.getWidth(), image.getHeight(), matrix, true);	
-		FuncTracer.endProc("Rotate");
-		
-		//saveBitmapFile(rotateImage);
-		FuncTracer.endFunc();
-		return rotateImage;
-	}
-	
-	private RawImage bufferToRawImage(final byte[] data){
-		RawImage image = new RawImage();
-		
-		image.mData = data;
-		//90 rotate
-		image.mWidth = mPreviewHeight;
-		image.mHeight = mPreviewWidth;
-		image.mRotate = 90;
-		image.mMirror = true;
-		
-		return image;
-	}
 	
 	class BufferHandler implements Camera.PreviewCallback{
 						
@@ -192,6 +183,8 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 	
 	public void processFrame(final byte[] data, final Runnable bufferConsumed) {
 		Log.i(TAG, "frame comes, current state is "+mFSM.getCurrentState());
+		
+		
 	
 		if (mFSM.STATE_HARD_CHECK == mFSM.getCurrentState() ||
 				mFSM.STATE_SOFT_CHECK == mFSM.getCurrentState()) {
@@ -204,7 +197,9 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 					mPreviewWidth = size.height; 
 				}
 				
-				mProc.searchEyesInImage(bufferToBitmap(data), new FaceAlignProc.CallbackWithEyePts() {
+				mProc.searchEyesInImage(
+						CamBufferToRawImage(mCamera, data, ImgType.TYPE_RGB565).toBitmap(),
+						new FaceAlignProc.CallbackWithEyePts() {
 					@Override
 					public void finish(float[] eyePts) {
 						if (null == eyePts){
@@ -230,7 +225,9 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 			
 			final float plotScale = (float)(mPlotView.getWidth()) / mPreviewWidth;  //90 degree rotated
 			try {
-				mProc.searchInImage(bufferToBitmap(data), Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
+				mProc.searchInImage(
+						CamBufferToRawImage(mCamera, data, ImgType.TYPE_RGB565).toBitmap(),
+						Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
 					@Override
 					public void finish(boolean status) {
 						
@@ -263,7 +260,9 @@ implements Camera.FaceDetectionListener,  CameraFaceTrackFSM.CameraFaceView{
 			final float plotScale = (float)(mPlotView.getWidth()) / mPreviewWidth; 
 			
 			try {
-				mProc.optimizeInImage(bufferToRawImage(data), Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
+				mProc.optimizeInImage(
+						CamBufferToRawImage(mCamera, data, ImgType.TYPE_GRAY8)
+						, Algorithm.ASM_QUICK, new FaceAlignProc.Callback() {
 					@Override
 					public void finish(boolean status) {
 						Log.i(TAG, "The result of soft fit is "+status);

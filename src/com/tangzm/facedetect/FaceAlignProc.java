@@ -59,6 +59,7 @@ public class FaceAlignProc{
 	
 	public void init(Context ctx, int resId){
         QMatrix.init(ctx);
+        RawImage.init(ctx);
 
 		mModel = new FaceModel(ctx, resId);
 		
@@ -447,7 +448,7 @@ public class FaceAlignProc{
 	private void adjustScaleFactor() {
 		//Always normalize the size of processed image, not let it too big or too small
 		float adjustScale = (float)Math.sqrt(Math.pow(mCurrentParams.get(0),2) + Math.pow(mCurrentParams.get(1),2));
-		Log.i(TAG, "adjustScale = "+adjustScale);
+		Log.i(TAG, "prevScale="+mScaleFactor+" adjustScale = "+adjustScale);
 		
         if (adjustScale >= 2.5 || adjustScale <=0.4) {
 			mScaleFactor /= adjustScale;
@@ -459,134 +460,19 @@ public class FaceAlignProc{
 	}
 	
 	private void setCurrentBitmapRaw(RawImage image) throws Exception
-	{	
-		if (image.mRotate==90 || image.mRotate==270) {
-			mImageW = (int)(image.mHeight * mScaleFactor);
-			mImageH = (int)(image.mWidth * mScaleFactor);			
-		}
-		else {
-			mImageW = (int)(image.mWidth * mScaleFactor);
-			mImageH = (int)(image.mHeight * mScaleFactor);
-		}
-
-        ScriptC_RGB565_to_GrayScale8 script = new ScriptC_RGB565_to_GrayScale8(mRS);
-        Type.Builder tbIn = new Type.Builder(mRS, Element.U8(mRS));
-        Type.Builder tbOut = new Type.Builder(mRS, Element.U8(mRS));
-        tbIn.setX(image.mWidth*image.mHeight*2);
-        tbOut.setX(mImageW).setY(mImageH);
-
-        mImgGrayScaled = new byte[mImageW*mImageH];
-        Allocation inAlloc = Allocation.createTyped(mRS, tbIn.create());
-        Allocation outAlloc = Allocation.createTyped(mRS, tbOut.create());
-        
-        inAlloc.copyFrom(image.mData);
-
-        script.set_rotate(image.mRotate);
-        if (image.mMirror){
-        	script.set_mirror(1);
-        }
-        else {
-        	script.set_mirror(0);
-        }
-        script.set_oWidth(image.mWidth);
-        script.set_oHeight(image.mHeight);
-        if (image.mRotate==90 || image.mRotate==270){
-        	script.set_mWidth(image.mHeight);
-        	script.set_mHeight(image.mWidth);
-        }
-        else{
-        	script.set_mWidth(image.mWidth);
-        	script.set_mHeight(image.mHeight);
-        }
-        script.set_sWidth(mImageW);
-        script.set_sHeight(mImageH);
-        
-        script.bind_input(inAlloc);
-        script.bind_output(outAlloc);
-        
-        int[] indexBuffer = new int[mImageH];
-        
-        for (int i=0; i<indexBuffer.length; i++){
-        	indexBuffer[i] = i;
-        }
-        Type.Builder tbIndex = new Type.Builder(mRS, Element.U32(mRS));
-        tbIndex.setX(indexBuffer.length);
-        Allocation indexAlloc = Allocation.createTyped(mRS, tbIndex.create());
-        indexAlloc.copyFrom(indexBuffer);
-        script.forEach_process(indexAlloc);
-        
-        outAlloc.copyTo(mImgGrayScaled);
+	{
+		mImgGrayScaled = image.scale((float)mScaleFactor).getData();
+		mImageW = image.getWidth();
+		mImageH = image.getHeight();
 	}
 	
 	private void setCurrentBitmap(Bitmap image) throws Exception
 	{	
-        Bitmap imgProcess = Bitmap.createScaledBitmap(image, (int)(image.getWidth()*mScaleFactor), (int)(image.getHeight()*mScaleFactor), true);
-
-        mImageW = imgProcess.getWidth();
-        mImageH = imgProcess.getHeight();
-        
-        //Create the float image
-        ;
-        
-        if (imgProcess.getConfig() == Bitmap.Config.ARGB_8888) {
-	        ScriptC_RGB888_to_GrayScale8 script = new ScriptC_RGB888_to_GrayScale8(mRS);
-	        Allocation inAlloc = Allocation.createFromBitmap(mRS, imgProcess);
-	        Type.Builder tb = new Type.Builder(mRS, Element.U8(mRS));
-	        tb.setX(mImageW).setY(mImageH);
-	        mImgGrayScaled = new byte[mImageW*mImageH];
-	        Allocation outAlloc = Allocation.createTyped(mRS, tb.create());
-	        script.forEach_root(inAlloc, outAlloc);
-	        outAlloc.copyTo(mImgGrayScaled);		
-        }
-        else if (imgProcess.getConfig() == Bitmap.Config.RGB_565) {  
-	        ScriptC_RGB565_to_GrayScale8 script = new ScriptC_RGB565_to_GrayScale8(mRS);
-	        Type.Builder tbIn = new Type.Builder(mRS, Element.U8(mRS));
-	        Type.Builder tbOut = new Type.Builder(mRS, Element.U8(mRS));
-	        tbIn.setX(mImageW*mImageH*2);
-	        tbOut.setX(mImageW).setY(mImageH);
-
-	        mImgGrayScaled = new byte[mImageW*mImageH];
-	        Allocation inAlloc = Allocation.createTyped(mRS, tbIn.create());
-	        Allocation outAlloc = Allocation.createTyped(mRS, tbOut.create());
-
-	        byte[] mOriginalBytes = new byte[mImageW*mImageH*2];
-	        ByteBuffer buffer = ByteBuffer.wrap(mOriginalBytes);
-	        imgProcess.copyPixelsToBuffer(buffer);
-	        inAlloc.copyFrom(mOriginalBytes);
-
-	        script.set_rotate(0);
-	        script.set_mirror(0);
-
-	        script.set_oWidth(mImageW);
-	        script.set_oHeight(mImageH);
-
-	        script.set_mWidth(mImageW);
-	        script.set_mHeight(mImageH);
-
-	        script.set_sWidth(mImageW);
-	        script.set_sHeight(mImageH);
-	        
-	        script.bind_input(inAlloc);
-	        script.bind_output(outAlloc);
-	        
-	        int[] indexBuffer = new int[mImageH];
-	        
-	        for (int i=0; i<indexBuffer.length; i++){
-	        	indexBuffer[i] = i;
-	        }
-	        Type.Builder tbIndex = new Type.Builder(mRS, Element.U32(mRS));
-	        tbIndex.setX(indexBuffer.length);
-	        Allocation indexAlloc = Allocation.createTyped(mRS, tbIndex.create());
-	        indexAlloc.copyFrom(indexBuffer);
-	        script.forEach_process(indexAlloc);
-	        
-	        outAlloc.copyTo(mImgGrayScaled);
-        }
-        else {
-	        throw new DataFormatException("Only support Bitmap in ARGB_8880");     	
-        }
-        
-
+		RawImage imgProcess = RawImage.fromBitmap(image);
+		
+		mImgGrayScaled = imgProcess.scale((float)mScaleFactor).setType(RawImage.ImgType.TYPE_GRAY8).getData();		
+		mImageW = imgProcess.getWidth();
+		mImageH = imgProcess.getHeight();
 	}
 	
 	private void clearFitHistory() {
